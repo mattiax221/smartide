@@ -29,9 +29,11 @@ const ITEMS: { id: ActivityView; label: string; icon: ReactNode }[] = [
 export function ActivityBar({ active, chatOpen, onSelect, onToggleChat }: ActivityBarProps) {
   return (
     <nav className="activity-bar" aria-label="Activity Bar">
-      <div className="activity-bar__brand" title="SmartIDE" aria-label="SmartIDE">
-        S
-      </div>
+      <Tooltip label="SmartIDE" side="right">
+        <div className="activity-bar__brand" aria-label="SmartIDE">
+          S
+        </div>
+      </Tooltip>
       {ITEMS.map((item) => (
         <Tooltip key={item.id} label={item.label}>
           <button

@@ -1,4 +1,5 @@
 import type { ActivityView } from "../components/layout/ActivityView";
+import type { FsEntry } from "../lib/workspace";
 
 export type { ActivityView };
 
@@ -8,16 +9,18 @@ export interface OpenTab {
   path: string;
   language: string;
   content: string;
-  /** Content when the tab was opened / last saved (demo: open). */
   originalContent: string;
   pinned: boolean;
   dirty: boolean;
+  /** true when backed by real FS path */
+  real: boolean;
 }
 
 export interface WorkspaceState {
-  /** null until real FS (Fase D); demo uses synthetic root label */
   rootPath: string | null;
   rootLabel: string;
+  entries: FsEntry[];
+  recent: string[];
 }
 
 export interface AiUiState {
@@ -27,9 +30,10 @@ export interface AiUiState {
 }
 
 export interface SettingsUiState {
-  /** Reserved for future prefs; keys live in Rust vault */
   editorFontSize: number;
   minimap: boolean;
+  wordWrap: boolean;
+  tabSize: number;
 }
 
 export type ToastKind = "info" | "success" | "error" | "warning";
@@ -56,4 +60,5 @@ export interface IdeState {
   settings: SettingsUiState;
   toasts: Toast[];
   hostBanner: string | null;
+  helpOpen: boolean;
 }

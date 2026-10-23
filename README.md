@@ -1,8 +1,10 @@
 # SmartIDE
 
-Desktop IDE scaffold: **Tauri 2 + Rust**, **React / TypeScript / Vite**, **Monaco**. Glass charcoal + yellow UI with multi-provider AI chat (keys encrypted on the host).
+Desktop IDE scaffold: **Tauri 2 + Rust**, **React / TypeScript / Vite**, **Monaco**. Glass charcoal + yellow UI, **custom title bar** (no OS chrome), Open Folder + real file edit/save, multi-provider AI chat (keys encrypted on the host).
 
 Product roadmap (A→Z, Italian): Cursor Project store → `docs/roadmap.md`.
+
+**Windows tip:** after pull, rebuild with `npm run tauri dev`. Hover labels use in-app tooltips (portal). Use **Open Folder** or `Ctrl+O`; save with `Ctrl+S`.
 
 ## Prerequisites
 

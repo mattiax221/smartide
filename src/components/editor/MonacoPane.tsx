@@ -1,5 +1,6 @@
 import Editor, { loader } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
+import type { SettingsUiState } from "../../state/types";
 
 const THEME_NAME = "smartide-dark";
 
@@ -28,7 +29,7 @@ function defineTheme(monaco: typeof import("monaco-editor")) {
       "editorWidget.background": "#141416ee",
       "editorWidget.border": "#f5c51830",
       "input.background": "#00000080",
-      "focusBorder": "#f5c51880",
+      focusBorder: "#f5c51880",
       "scrollbarSlider.background": "#f5c51833",
       "scrollbarSlider.hoverBackground": "#f5c51855",
     },
@@ -44,9 +45,10 @@ interface MonacoPaneProps {
   language: string;
   value: string;
   onChange: (value: string) => void;
+  settings: SettingsUiState;
 }
 
-export function MonacoPane({ path, language, value, onChange }: MonacoPaneProps) {
+export function MonacoPane({ path, language, value, onChange, settings }: MonacoPaneProps) {
   return (
     <div className="editor-pane" data-path={path}>
       <Editor
@@ -59,14 +61,17 @@ export function MonacoPane({ path, language, value, onChange }: MonacoPaneProps)
         options={
           {
             fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
-            fontSize: 13,
-            lineHeight: 20,
-            minimap: { enabled: true, scale: 1 },
+            fontSize: settings.editorFontSize,
+            lineHeight: Math.round(settings.editorFontSize * 1.55),
+            minimap: { enabled: settings.minimap, scale: 1 },
+            wordWrap: settings.wordWrap ? "on" : "off",
             scrollBeyondLastLine: false,
             automaticLayout: true,
-            tabSize: 2,
+            tabSize: settings.tabSize,
             renderLineHighlight: "line",
             padding: { top: 10 },
+            find: { addExtraSpaceOnTop: false },
+            multiCursorModifier: "alt",
             scrollbar: {
               verticalScrollbarSize: 8,
               horizontalScrollbarSize: 8,

@@ -1,7 +1,7 @@
-import type { OpenTab } from "../../state/types";
+import type { OpenTab, SettingsUiState } from "../../state/types";
 import { MonacoPane } from "../editor/MonacoPane";
 import { SettingsView } from "../settings/SettingsView";
-import { Button, EmptyState } from "../ui";
+import { Button, EmptyState, Tooltip } from "../ui";
 
 interface EditorAreaProps {
   showSettings: boolean;
@@ -9,16 +9,19 @@ interface EditorAreaProps {
   activeTabId: string | null;
   secondaryTabId: string | null;
   splitEditor: boolean;
+  settings: SettingsUiState;
   onSelectTab: (id: string, pane?: "primary" | "secondary") => void;
   onCloseTab: (id: string) => void;
   onTogglePin: (id: string) => void;
   onChangeContent: (id: string, content: string) => void;
   onToggleSplit: () => void;
   onOpenExplorer: () => void;
+  onSave: () => void;
+  onOpenHelp: () => void;
 }
 
 function Breadcrumb({ path }: { path: string }) {
-  const parts = path.split("/").filter(Boolean);
+  const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
   return (
     <div className="editor-breadcrumb">
       {parts.map((seg, i) => (
@@ -31,7 +34,6 @@ function Breadcrumb({ path }: { path: string }) {
           </span>
         </span>
       ))}
-      <div className="editor-toolbar" />
     </div>
   );
 }
@@ -44,6 +46,8 @@ function TabBar({
   onTogglePin,
   splitEditor,
   onToggleSplit,
+  onSave,
+  onOpenHelp,
 }: {
   tabs: OpenTab[];
   activeId: string | null;
@@ -52,6 +56,8 @@ function TabBar({
   onTogglePin: (id: string) => void;
   splitEditor: boolean;
   onToggleSplit: () => void;
+  onSave: () => void;
+  onOpenHelp: () => void;
 }) {
   const ordered = [...tabs].sort((a, b) => Number(b.pinned) - Number(a.pinned));
   return (
@@ -69,36 +75,51 @@ function TabBar({
             onSelect(tab.id, e.altKey || e.metaKey ? "secondary" : "primary");
           }}
           onDoubleClick={() => onTogglePin(tab.id)}
-          title="Double-click pin · Alt-click secondary (when split)"
         >
-          <span className="tab__name">{tab.name}</span>
+          <Tooltip label={tab.path} side="bottom">
+            <span className="tab__name">{tab.name}</span>
+          </Tooltip>
           <span className="tab__actions">
-            <span
-              className="tab__close"
-              role="button"
-              tabIndex={0}
-              aria-label={`Close ${tab.name}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose(tab.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
+            <Tooltip label={`Close ${tab.name}`} side="bottom">
+              <span
+                className="tab__close"
+                role="button"
+                tabIndex={0}
+                aria-label={`Close ${tab.name}`}
+                onClick={(e) => {
                   e.stopPropagation();
                   onClose(tab.id);
-                }
-              }}
-            >
-              ×
-            </span>
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onClose(tab.id);
+                  }
+                }}
+              >
+                ×
+              </span>
+            </Tooltip>
           </span>
         </button>
       ))}
-      <div className="editor-toolbar" style={{ marginLeft: "auto", paddingRight: 8 }}>
-        <Button variant="subtle" onClick={onToggleSplit} aria-pressed={splitEditor}>
-          {splitEditor ? "Unsplit" : "Split"}
-        </Button>
+      <div className="editor-toolbar" style={{ marginLeft: "auto", paddingRight: 8, gap: 6 }}>
+        <Tooltip label="Save (Ctrl+S)" side="bottom">
+          <Button variant="subtle" onClick={onSave}>
+            Save
+          </Button>
+        </Tooltip>
+        <Tooltip label="Split editor" side="bottom">
+          <Button variant="subtle" onClick={onToggleSplit} aria-pressed={splitEditor}>
+            {splitEditor ? "Unsplit" : "Split"}
+          </Button>
+        </Tooltip>
+        <Tooltip label="Shortcuts" side="bottom">
+          <Button variant="subtle" onClick={onOpenHelp}>
+            ?
+          </Button>
+        </Tooltip>
       </div>
     </div>
   );
@@ -106,9 +127,11 @@ function TabBar({
 
 function Pane({
   tab,
+  settings,
   onChange,
 }: {
   tab: OpenTab;
+  settings: SettingsUiState;
   onChange: (content: string) => void;
 }) {
   return (
@@ -119,6 +142,7 @@ function Pane({
         language={tab.language}
         value={tab.content}
         onChange={onChange}
+        settings={settings}
       />
     </>
   );
@@ -130,12 +154,15 @@ export function EditorArea({
   activeTabId,
   secondaryTabId,
   splitEditor,
+  settings,
   onSelectTab,
   onCloseTab,
   onTogglePin,
   onChangeContent,
   onToggleSplit,
   onOpenExplorer,
+  onSave,
+  onOpenHelp,
 }: EditorAreaProps) {
   if (showSettings) {
     return (
@@ -159,35 +186,49 @@ export function EditorArea({
           onTogglePin={onTogglePin}
           splitEditor={splitEditor}
           onToggleSplit={onToggleSplit}
+          onSave={onSave}
+          onOpenHelp={onOpenHelp}
         />
       )}
 
       {active && splitEditor ? (
         <div className="editor-split">
           <div className="editor-split__pane">
-            <Pane tab={active} onChange={(c) => onChangeContent(active.id, c)} />
+            <Pane
+              tab={active}
+              settings={settings}
+              onChange={(c) => onChangeContent(active.id, c)}
+            />
           </div>
           <div className="editor-split__pane">
             {secondary ? (
-              <Pane tab={secondary} onChange={(c) => onChangeContent(secondary.id, c)} />
+              <Pane
+                tab={secondary}
+                settings={settings}
+                onChange={(c) => onChangeContent(secondary.id, c)}
+              />
             ) : (
               <EmptyState
                 title="Pick a second file"
-                body="Open another tab, then click it while split is on — or open two files first."
+                body="Alt-click another tab to load it in the secondary pane."
               />
             )}
           </div>
         </div>
       ) : active ? (
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-          <Pane tab={active} onChange={(c) => onChangeContent(active.id, c)} />
+          <Pane
+            tab={active}
+            settings={settings}
+            onChange={(c) => onChangeContent(active.id, c)}
+          />
         </div>
       ) : (
         <div className="editor-welcome">
           <div className="editor-welcome__inner">
             <EmptyState
               title="SmartIDE"
-              body="Open a file from the explorer, toggle AI Chat, or configure provider keys in Settings."
+              body="Open a folder (Ctrl+O), pick a file, or use demo files. Toggle AI Chat from the spark icon."
               actionLabel="Open explorer"
               onAction={onOpenExplorer}
               icon="S"

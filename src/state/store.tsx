@@ -7,6 +7,12 @@ import {
   type ReactNode,
 } from "react";
 import type { DemoFile } from "../lib/demoFiles";
+import {
+  basename,
+  loadRecentWorkspaces,
+  pushRecentWorkspace,
+  type FsEntry,
+} from "../lib/workspace";
 import type {
   ActivityView,
   AiUiState,
@@ -19,11 +25,15 @@ import type {
 
 type Action =
   | { type: "setActivity"; activity: ActivityView }
-  | { type: "openFile"; file: DemoFile }
+  | { type: "setWorkspace"; rootPath: string; entries: FsEntry[] }
+  | { type: "setEntries"; entries: FsEntry[] }
+  | { type: "openDemoFile"; file: DemoFile }
+  | { type: "openRealFile"; entry: FsEntry; content: string }
   | { type: "selectTab"; id: string; pane?: "primary" | "secondary" }
   | { type: "closeTab"; id: string }
   | { type: "togglePin"; id: string }
   | { type: "changeContent"; id: string; content: string }
+  | { type: "markSaved"; id: string }
   | { type: "setPanelCollapsed"; collapsed: boolean }
   | { type: "setPanelHeight"; height: number }
   | { type: "setPanelTab"; tab: IdeState["panelTab"] }
@@ -35,13 +45,17 @@ type Action =
   | { type: "patchSettings"; patch: Partial<SettingsUiState> }
   | { type: "pushToast"; toast: Omit<Toast, "id" | "createdAt"> & { id?: string } }
   | { type: "dismissToast"; id: string }
-  | { type: "setHostBanner"; message: string | null };
+  | { type: "setHostBanner"; message: string | null }
+  | { type: "setHelpOpen"; open: boolean }
+  | { type: "cycleTab"; dir: 1 | -1 };
 
 const initialState: IdeState = {
   activity: "explorer",
   workspace: {
     rootPath: null,
     rootLabel: "SMARTIDE",
+    entries: [],
+    recent: loadRecentWorkspaces(),
   },
   tabs: [],
   activeTabId: null,
@@ -58,12 +72,15 @@ const initialState: IdeState = {
   settings: {
     editorFontSize: 13,
     minimap: true,
+    wordWrap: false,
+    tabSize: 2,
   },
   toasts: [],
   hostBanner: null,
+  helpOpen: false,
 };
 
-function fileToTab(file: DemoFile): OpenTab {
+function demoToTab(file: DemoFile): OpenTab {
   return {
     id: file.id,
     name: file.name,
@@ -73,6 +90,21 @@ function fileToTab(file: DemoFile): OpenTab {
     originalContent: file.content,
     pinned: false,
     dirty: false,
+    real: false,
+  };
+}
+
+function realToTab(entry: FsEntry, content: string): OpenTab {
+  return {
+    id: entry.path,
+    name: entry.name || basename(entry.path),
+    path: entry.path,
+    language: entry.language || "plaintext",
+    content,
+    originalContent: content,
+    pinned: false,
+    dirty: false,
+    real: true,
   };
 }
 
@@ -80,14 +112,48 @@ function reducer(state: IdeState, action: Action): IdeState {
   switch (action.type) {
     case "setActivity":
       return { ...state, activity: action.activity };
-    case "openFile": {
+    case "setWorkspace": {
+      const label = basename(action.rootPath) || action.rootPath;
+      const recent = pushRecentWorkspace(action.rootPath);
+      return {
+        ...state,
+        activity: "explorer",
+        workspace: {
+          ...state.workspace,
+          rootPath: action.rootPath,
+          rootLabel: label.toUpperCase(),
+          entries: action.entries,
+          recent,
+        },
+        tabs: [],
+        activeTabId: null,
+        secondaryTabId: null,
+      };
+    }
+    case "setEntries":
+      return {
+        ...state,
+        workspace: { ...state.workspace, entries: action.entries },
+      };
+    case "openDemoFile": {
       if (action.file.kind !== "file") return state;
       const exists = state.tabs.some((t) => t.id === action.file.id);
       return {
         ...state,
         activity: "explorer",
-        tabs: exists ? state.tabs : [...state.tabs, fileToTab(action.file)],
+        tabs: exists ? state.tabs : [...state.tabs, demoToTab(action.file)],
         activeTabId: action.file.id,
+      };
+    }
+    case "openRealFile": {
+      const exists = state.tabs.some((t) => t.id === action.entry.path);
+      return {
+        ...state,
+        activity: "explorer",
+        tabs: exists
+          ? state.tabs
+          : [...state.tabs, realToTab(action.entry, action.content)],
+        activeTabId: action.entry.path,
       };
     }
     case "selectTab":
@@ -124,6 +190,15 @@ function reducer(state: IdeState, action: Action): IdeState {
                 content: action.content,
                 dirty: action.content !== t.originalContent,
               }
+            : t,
+        ),
+      };
+    case "markSaved":
+      return {
+        ...state,
+        tabs: state.tabs.map((t) =>
+          t.id === action.id
+            ? { ...t, originalContent: t.content, dirty: false }
             : t,
         ),
       };
@@ -177,6 +252,15 @@ function reducer(state: IdeState, action: Action): IdeState {
       return { ...state, toasts: state.toasts.filter((t) => t.id !== action.id) };
     case "setHostBanner":
       return { ...state, hostBanner: action.message };
+    case "setHelpOpen":
+      return { ...state, helpOpen: action.open };
+    case "cycleTab": {
+      if (state.tabs.length < 2 || !state.activeTabId) return state;
+      const idx = state.tabs.findIndex((t) => t.id === state.activeTabId);
+      const next =
+        state.tabs[(idx + action.dir + state.tabs.length) % state.tabs.length];
+      return { ...state, activeTabId: next.id };
+    }
     default:
       return state;
   }
@@ -185,11 +269,15 @@ function reducer(state: IdeState, action: Action): IdeState {
 interface IdeStoreApi {
   state: IdeState;
   setActivity: (activity: ActivityView) => void;
-  openFile: (file: DemoFile) => void;
+  setWorkspace: (rootPath: string, entries: FsEntry[]) => void;
+  setEntries: (entries: FsEntry[]) => void;
+  openDemoFile: (file: DemoFile) => void;
+  openRealFile: (entry: FsEntry, content: string) => void;
   selectTab: (id: string, pane?: "primary" | "secondary") => void;
   closeTab: (id: string) => void;
   togglePin: (id: string) => void;
   changeContent: (id: string, content: string) => void;
+  markSaved: (id: string) => void;
   setPanelCollapsed: (collapsed: boolean) => void;
   setPanelHeight: (height: number) => void;
   setPanelTab: (tab: IdeState["panelTab"]) => void;
@@ -202,6 +290,8 @@ interface IdeStoreApi {
   dismissToast: (id: string) => void;
   setHostBanner: (message: string | null) => void;
   notifyHostError: (err: unknown, fallback?: string) => void;
+  setHelpOpen: (open: boolean) => void;
+  cycleTab: (dir: 1 | -1) => void;
 }
 
 const IdeStoreContext = createContext<IdeStoreApi | null>(null);
@@ -213,27 +303,27 @@ export function IdeStoreProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "pushToast", toast: { kind, title, detail } });
   }, []);
 
-  const notifyHostError = useCallback(
-    (err: unknown, fallback = "Host error") => {
-      const detail = err instanceof Error ? err.message : String(err);
-      dispatch({
-        type: "pushToast",
-        toast: { kind: "error", title: fallback, detail },
-      });
-      dispatch({ type: "setHostBanner", message: detail });
-    },
-    [],
-  );
+  const notifyHostError = useCallback((err: unknown, fallback = "Host error") => {
+    const detail = err instanceof Error ? err.message : String(err);
+    dispatch({ type: "pushToast", toast: { kind: "error", title: fallback, detail } });
+    dispatch({ type: "setHostBanner", message: detail });
+  }, []);
 
   const api = useMemo<IdeStoreApi>(
     () => ({
       state,
       setActivity: (activity) => dispatch({ type: "setActivity", activity }),
-      openFile: (file) => dispatch({ type: "openFile", file }),
+      setWorkspace: (rootPath, entries) =>
+        dispatch({ type: "setWorkspace", rootPath, entries }),
+      setEntries: (entries) => dispatch({ type: "setEntries", entries }),
+      openDemoFile: (file) => dispatch({ type: "openDemoFile", file }),
+      openRealFile: (entry, content) =>
+        dispatch({ type: "openRealFile", entry, content }),
       selectTab: (id, pane) => dispatch({ type: "selectTab", id, pane }),
       closeTab: (id) => dispatch({ type: "closeTab", id }),
       togglePin: (id) => dispatch({ type: "togglePin", id }),
       changeContent: (id, content) => dispatch({ type: "changeContent", id, content }),
+      markSaved: (id) => dispatch({ type: "markSaved", id }),
       setPanelCollapsed: (collapsed) => dispatch({ type: "setPanelCollapsed", collapsed }),
       setPanelHeight: (height) => dispatch({ type: "setPanelHeight", height }),
       setPanelTab: (tab) => dispatch({ type: "setPanelTab", tab }),
@@ -247,6 +337,8 @@ export function IdeStoreProvider({ children }: { children: ReactNode }) {
       dismissToast: (id) => dispatch({ type: "dismissToast", id }),
       setHostBanner: (message) => dispatch({ type: "setHostBanner", message }),
       notifyHostError,
+      setHelpOpen: (open) => dispatch({ type: "setHelpOpen", open }),
+      cycleTab: (dir) => dispatch({ type: "cycleTab", dir }),
     }),
     [state, pushToast, notifyHostError],
   );

@@ -1,11 +1,13 @@
 mod ai;
 mod secrets;
+mod workspace;
 
 use ai::{ChatRequest, ChatResponse, ProviderModels};
 use secrets::ProviderInfo;
 use std::path::PathBuf;
 use tauri::Manager;
 use tracing::{error, info, warn};
+use workspace::{FsEntry, WorkspaceState};
 
 fn app_data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
@@ -99,12 +101,56 @@ async fn ai_chat(app: tauri::AppHandle, request: ChatRequest) -> Result<ChatResp
     }
 }
 
+#[tauri::command]
+fn open_workspace(
+    state: tauri::State<'_, WorkspaceState>,
+    path: String,
+) -> Result<Vec<FsEntry>, String> {
+    let root = PathBuf::from(&path);
+    workspace::set_root(&state, root.clone())?;
+    info!(path = %path, "open_workspace");
+    workspace::list_tree(&root).map_err(Into::into)
+}
+
+#[tauri::command]
+fn list_workspace(state: tauri::State<'_, WorkspaceState>) -> Result<Vec<FsEntry>, String> {
+    let root = workspace::get_root(&state)?
+        .ok_or_else(|| "No workspace open".to_string())?;
+    workspace::list_tree(&root).map_err(Into::into)
+}
+
+#[tauri::command]
+fn read_workspace_file(
+    state: tauri::State<'_, WorkspaceState>,
+    path: String,
+) -> Result<String, String> {
+    workspace::read_text(&state, PathBuf::from(path).as_path()).map_err(Into::into)
+}
+
+#[tauri::command]
+fn write_workspace_file(
+    state: tauri::State<'_, WorkspaceState>,
+    path: String,
+    content: String,
+) -> Result<(), String> {
+    info!(path = %path, bytes = content.len(), "write_workspace_file");
+    workspace::write_text(&state, PathBuf::from(path).as_path(), &content).map_err(Into::into)
+}
+
+#[tauri::command]
+fn workspace_root(state: tauri::State<'_, WorkspaceState>) -> Result<Option<String>, String> {
+    Ok(workspace::get_root(&state)?
+        .map(|p| p.to_string_lossy().to_string()))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
     info!("SmartIDE starting");
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .manage(WorkspaceState::default())
         .invoke_handler(tauri::generate_handler![
             list_ai_providers,
             set_api_key,
@@ -112,7 +158,12 @@ pub fn run() {
             delete_api_key,
             has_api_key,
             list_ai_models,
-            ai_chat
+            ai_chat,
+            open_workspace,
+            list_workspace,
+            read_workspace_file,
+            write_workspace_file,
+            workspace_root
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

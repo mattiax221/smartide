@@ -1,14 +1,22 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { DEMO_TREE, type DemoFile } from "../../lib/demoFiles";
+import type { FsEntry } from "../../lib/workspace";
 import { IconFile, IconFolder } from "../icons";
-import { EmptyState } from "../ui";
+import { Button, EmptyState } from "../ui";
 import type { ActivityView } from "./ActivityView";
 
 interface SidebarProps {
   view: ActivityView;
   selectedFileId: string | null;
   workspaceLabel: string;
-  onOpenFile: (file: DemoFile) => void;
+  workspaceRoot: string | null;
+  entries: FsEntry[];
+  recent: string[];
+  onOpenDemoFile: (file: DemoFile) => void;
+  onOpenFsEntry: (entry: FsEntry) => void;
+  onOpenFolder: () => void;
+  onOpenRecent: (path: string) => void;
+  onRefresh: () => void;
   onOpenSettings: () => void;
 }
 
@@ -45,77 +53,144 @@ function CollapsibleSection({
   );
 }
 
-function Explorer({
-  selectedFileId,
-  workspaceLabel,
-  onOpenFile,
-}: {
-  selectedFileId: string | null;
-  workspaceLabel: string;
-  onOpenFile: (file: DemoFile) => void;
-}) {
-  const files = DEMO_TREE.filter((e) => e.kind === "file");
-  return (
-    <>
-      <div className="sidebar__header">
-        <span>Explorer</span>
-        <span>{workspaceLabel}</span>
-      </div>
-      <div className="sidebar__body" role="tree" aria-label="File explorer">
-        {files.length === 0 ? (
-          <EmptyState
-            title="No workspace"
-            body="Open a folder to browse files. Demo tree ships until Fase D."
-            icon="⌀"
-          />
-        ) : (
-          <CollapsibleSection title="Demo project" defaultOpen>
-            {DEMO_TREE.map((entry) => {
-              if (entry.kind === "folder") {
-                return (
-                  <div key={entry.id} className="tree-item" role="treeitem" aria-expanded>
-                    <IconFolder />
-                    <span>{entry.name}</span>
-                  </div>
-                );
-              }
-              return (
-                <button
-                  key={entry.id}
-                  type="button"
-                  className={`tree-item${entry.parent ? " tree-item--nested" : ""}`}
-                  role="treeitem"
-                  aria-selected={selectedFileId === entry.id}
-                  onClick={() => onOpenFile(entry)}
-                >
-                  <IconFile className={fileIconClass(entry.name)} />
-                  <span>{entry.name}</span>
-                </button>
-              );
-            })}
-          </CollapsibleSection>
-        )}
-      </div>
-    </>
-  );
+function depthOf(entry: FsEntry, byId: Map<string, FsEntry>): number {
+  let d = 0;
+  let p = entry.parent;
+  while (p) {
+    d += 1;
+    p = byId.get(p)?.parent ?? null;
+    if (d > 32) break;
+  }
+  return d;
 }
 
 export function Sidebar({
   view,
   selectedFileId,
   workspaceLabel,
-  onOpenFile,
+  workspaceRoot,
+  entries,
+  recent,
+  onOpenDemoFile,
+  onOpenFsEntry,
+  onOpenFolder,
+  onOpenRecent,
+  onRefresh,
   onOpenSettings,
 }: SidebarProps) {
+  const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
+
   return (
     <aside className="sidebar" data-view={view} aria-label="Sidebar">
       {view === "explorer" && (
-        <Explorer
-          selectedFileId={selectedFileId}
-          workspaceLabel={workspaceLabel}
-          onOpenFile={onOpenFile}
-        />
+        <>
+          <div className="sidebar__header">
+            <span>Explorer</span>
+            <span>{workspaceLabel}</span>
+          </div>
+          <div className="sidebar__body" role="tree" aria-label="File explorer">
+            <div className="sidebar-actions">
+              <Button variant="primary" onClick={onOpenFolder}>
+                Open Folder
+              </Button>
+              {workspaceRoot ? (
+                <Button variant="ghost" onClick={onRefresh}>
+                  Refresh
+                </Button>
+              ) : null}
+            </div>
+
+            {workspaceRoot && entries.length > 0 ? (
+              <CollapsibleSection title={workspaceLabel} defaultOpen>
+                {entries.map((entry) => {
+                  const depth = depthOf(entry, byId);
+                  if (entry.kind === "folder") {
+                    return (
+                      <div
+                        key={entry.id}
+                        className="tree-item"
+                        role="treeitem"
+                        aria-expanded
+                        style={{ paddingLeft: 10 + depth * 12 }}
+                      >
+                        <IconFolder />
+                        <span>{entry.name}</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      className="tree-item"
+                      role="treeitem"
+                      aria-selected={selectedFileId === entry.id}
+                      style={{ paddingLeft: 10 + depth * 12 }}
+                      onClick={() => onOpenFsEntry(entry)}
+                    >
+                      <IconFile className={fileIconClass(entry.name)} />
+                      <span>{entry.name}</span>
+                    </button>
+                  );
+                })}
+              </CollapsibleSection>
+            ) : (
+              <EmptyState
+                title="No folder open"
+                body="Open a folder to browse real files. Demo files stay available below until you do."
+                actionLabel="Open Folder"
+                onAction={onOpenFolder}
+                icon="⌀"
+              />
+            )}
+
+            {!workspaceRoot && (
+              <CollapsibleSection title="Demo project" defaultOpen>
+                {DEMO_TREE.map((entry) => {
+                  if (entry.kind === "folder") {
+                    return (
+                      <div key={entry.id} className="tree-item" role="treeitem" aria-expanded>
+                        <IconFolder />
+                        <span>{entry.name}</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      className={`tree-item${entry.parent ? " tree-item--nested" : ""}`}
+                      role="treeitem"
+                      aria-selected={selectedFileId === entry.id}
+                      onClick={() => onOpenDemoFile(entry)}
+                    >
+                      <IconFile className={fileIconClass(entry.name)} />
+                      <span>{entry.name}</span>
+                    </button>
+                  );
+                })}
+              </CollapsibleSection>
+            )}
+
+            {recent.length > 0 && (
+              <CollapsibleSection title="Recent" defaultOpen={false}>
+                {recent.map((path) => (
+                  <button
+                    key={path}
+                    type="button"
+                    className="tree-item"
+                    title={path}
+                    onClick={() => onOpenRecent(path)}
+                  >
+                    <span className="tree-item__path">{path}</span>
+                  </button>
+                ))}
+              </CollapsibleSection>
+            )}
+          </div>
+        </>
       )}
+
       {view === "search" && (
         <>
           <div className="sidebar__header">
@@ -158,7 +233,7 @@ export function Sidebar({
           <div className="sidebar__body">
             <EmptyState
               title="API keys & prefs"
-              body="Provider keys open in the editor area. Keep vault secrets on the host."
+              body="Provider keys and editor options open in the editor area."
               actionLabel="Focus settings"
               onAction={onOpenSettings}
               icon="⚙"

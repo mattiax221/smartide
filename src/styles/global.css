@@ -72,7 +72,7 @@ a {
 /* ——— Shell: floating glass cards ——— */
 .ide-shell {
   display: grid;
-  grid-template-rows: 1fr var(--statusbar-height);
+  grid-template-rows: auto 1fr var(--statusbar-height);
   height: 100%;
   width: 100%;
   padding: var(--shell-pad);
