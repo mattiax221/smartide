@@ -1,14 +1,19 @@
 # SmartIDE
 
-Desktop IDE scaffold built with **Tauri 2** (Rust), **React + TypeScript + Vite**, and **Monaco Editor**. Glassmorphic charcoal + yellow UI with multi-provider AI chat (keys encrypted in the Tauri host).
+Desktop IDE scaffold: **Tauri 2 + Rust**, **React / TypeScript / Vite**, **Monaco**. Glass charcoal + yellow UI with multi-provider AI chat (keys encrypted on the host).
 
 Product roadmap (A→Z, Italian): Cursor Project store → `docs/roadmap.md`.
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 20+ (npm)
-- [Rust](https://rustup.rs/) stable **1.90+** (see `rust-toolchain.toml`)
-- Tauri Linux deps (Debian/Ubuntu):
+| Platform | Requirements |
+|----------|----------------|
+| **All** | [Node.js](https://nodejs.org/) 20+, [Rust](https://rustup.rs/) **1.90+** (`rust-toolchain.toml`) |
+| **Linux** | WebKitGTK / GTK (see below) |
+| **macOS** | Xcode CLT (`xcode-select --install`) |
+| **Windows** | **MSVC Build Tools** with **Desktop development with C++** (provides `link.exe`). Install via [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/). Also WebView2 (usually present on Win10/11). |
+
+### Linux packages (Debian/Ubuntu)
 
 ```bash
 sudo apt update
@@ -16,7 +21,18 @@ sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
   build-essential curl wget file libssl-dev libgtk-3-dev
 ```
 
-See [Tauri prerequisites](https://tauri.app/start/prerequisites/) for macOS / Windows.
+Full guide: [Tauri prerequisites](https://tauri.app/start/prerequisites/).
+
+### Windows: `link.exe` not found
+
+Rust’s MSVC toolchain needs the Visual C++ linker. If `tauri build` / `cargo build` fails with `linker link.exe not found`:
+
+1. Install **Build Tools for Visual Studio**
+2. Select workload **Desktop development with C++**
+3. Open **“x64 Native Tools Command Prompt for VS”** (or ensure the MSVC environment is on `PATH`)
+4. Re-run `npm run tauri dev`
+
+Alternatively: `rustup default stable-x86_64-pc-windows-gnu` + MinGW (not the recommended Tauri path).
 
 ## Setup
 
@@ -24,49 +40,52 @@ See [Tauri prerequisites](https://tauri.app/start/prerequisites/) for macOS / Wi
 npm install
 ```
 
-## Run locally
-
-Frontend only (browser preview — API key storage needs Tauri):
+## Dev / build checklist
 
 ```bash
+# 1) Frontend only (no secure key vault / ai_chat)
 npm run dev
-```
 
-Full desktop app:
-
-```bash
+# 2) Desktop app (preferred)
 npm run tauri dev
-```
 
-## Build
-
-```bash
-# Frontend production bundle
+# 3) Typecheck + Vite production bundle
 npm run build
 
-# Desktop installers / binaries
+# 4) Native binary + installers
 npm run tauri build
 ```
+
+| Check | Linux | macOS | Windows |
+|-------|-------|-------|---------|
+| `npm run build` | yes | yes | yes |
+| `npm run tauri dev` | needs WebKitGTK | needs CLT | needs MSVC + WebView2 |
+| `npm run tauri build` | deb/rpm/AppImage | `.app` / dmg (sign later) | MSI/NSIS (sign later) |
+
+Rust logs: set `RUST_LOG=info` (or `smartide_lib=debug`) when running `tauri dev`.
 
 ## Project layout
 
 ```
-src/                  React UI (shell, Monaco, settings)
-src-tauri/            Rust / Tauri shell
-  src/secrets.rs      AES-GCM API key store + OS keyring hooks
-  src/lib.rs          Tauri commands
+src/                  React UI
+  state/store.tsx     Lightweight IDE store (tabs, workspace, AI, settings, toasts)
+  components/ui/      Shared Button / Input / Select / EmptyState / Toast
+src-tauri/            Rust host
+  src/secrets.rs      Encrypted API keys
+  src/ai.rs           Multi-provider chat
+  src/lib.rs          Commands + tracing logs
 ```
 
 ### Tauri commands
 
 | Command | Purpose |
 |---------|---------|
-| `list_ai_providers` | Known providers + whether a key is stored |
+| `list_ai_providers` | Providers + key presence |
 | `set_api_key` / `get_api_key` / `delete_api_key` / `has_api_key` | Secure key CRUD |
-| `list_ai_models` | Default models per provider |
-| `ai_chat` | Chat completions (keys never leave the host) |
+| `list_ai_models` | Default models |
+| `ai_chat` | Chat completions (keys stay on host) |
 
-Providers: OpenAI, Anthropic, Google Gemini, Groq, OpenRouter, Ollama (local, no key). Open the spark icon for the chat panel; the active editor file is attached as context when present.
+Providers: Ollama, Groq, Gemini, OpenRouter, OpenAI, Anthropic. Spark icon → chat; open editor file is attached as context.
 
 ## License
 

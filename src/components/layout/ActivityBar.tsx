@@ -7,8 +7,10 @@ import {
   IconSettings,
   IconSpark,
 } from "../icons";
+import { Tooltip } from "../ui";
+import type { ActivityView } from "./ActivityView";
 
-export type ActivityView = "explorer" | "search" | "git" | "extensions" | "settings";
+export type { ActivityView };
 
 interface ActivityBarProps {
   active: ActivityView;
@@ -27,43 +29,45 @@ const ITEMS: { id: ActivityView; label: string; icon: ReactNode }[] = [
 export function ActivityBar({ active, chatOpen, onSelect, onToggleChat }: ActivityBarProps) {
   return (
     <nav className="activity-bar" aria-label="Activity Bar">
-      <div className="activity-bar__brand" title="SmartIDE" aria-hidden>
+      <div className="activity-bar__brand" title="SmartIDE" aria-label="SmartIDE">
         S
       </div>
       {ITEMS.map((item) => (
+        <Tooltip key={item.id} label={item.label}>
+          <button
+            type="button"
+            className="activity-btn"
+            aria-label={item.label}
+            aria-pressed={active === item.id}
+            onClick={() => onSelect(item.id)}
+          >
+            {item.icon}
+          </button>
+        </Tooltip>
+      ))}
+      <Tooltip label="AI Chat">
         <button
-          key={item.id}
           type="button"
           className="activity-btn"
-          title={item.label}
-          aria-label={item.label}
-          aria-pressed={active === item.id}
-          onClick={() => onSelect(item.id)}
+          aria-label="AI Chat"
+          aria-pressed={chatOpen}
+          onClick={onToggleChat}
         >
-          {item.icon}
+          <IconSpark />
         </button>
-      ))}
-      <button
-        type="button"
-        className="activity-btn"
-        title="AI Chat"
-        aria-label="AI Chat"
-        aria-pressed={chatOpen}
-        onClick={onToggleChat}
-      >
-        <IconSpark />
-      </button>
+      </Tooltip>
       <div className="activity-bar__spacer" />
-      <button
-        type="button"
-        className="activity-btn"
-        title="Settings"
-        aria-label="Settings"
-        aria-pressed={active === "settings"}
-        onClick={() => onSelect("settings")}
-      >
-        <IconSettings />
-      </button>
+      <Tooltip label="Settings">
+        <button
+          type="button"
+          className="activity-btn"
+          aria-label="Settings"
+          aria-pressed={active === "settings"}
+          onClick={() => onSelect("settings")}
+        >
+          <IconSettings />
+        </button>
+      </Tooltip>
     </nav>
   );
 }

@@ -1,25 +1,22 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ContextFile } from "../../lib/ai";
-import type { DemoFile } from "../../lib/demoFiles";
+import { useIdeStore } from "../../state/store";
 import { ChatPanel } from "../chat/ChatPanel";
-import { ActivityBar, type ActivityView } from "./ActivityBar";
+import { ToastHost } from "../ui";
+import { ActivityBar } from "./ActivityBar";
 import { BottomPanel } from "./BottomPanel";
-import { demoFileToTab, EditorArea, type OpenTab } from "./EditorArea";
+import { EditorArea } from "./EditorArea";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
 
 export function IdeShell() {
-  const [activity, setActivity] = useState<ActivityView>("explorer");
-  const [tabs, setTabs] = useState<OpenTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
-  const [chatOpen, setChatOpen] = useState(true);
-
-  const showSettings = activity === "settings";
+  const store = useIdeStore();
+  const { state } = store;
+  const showSettings = state.activity === "settings";
 
   const activeTab = useMemo(
-    () => tabs.find((t) => t.id === activeTabId) ?? null,
-    [tabs, activeTabId],
+    () => state.tabs.find((t) => t.id === state.activeTabId) ?? null,
+    [state.tabs, state.activeTabId],
   );
 
   const contextFile: ContextFile | null = useMemo(() => {
@@ -31,64 +28,56 @@ export function IdeShell() {
     };
   }, [activeTab, showSettings]);
 
-  function openFile(file: DemoFile) {
-    if (file.kind !== "file") return;
-    setActivity("explorer");
-    setTabs((prev) => {
-      if (prev.some((t) => t.id === file.id)) return prev;
-      return [...prev, demoFileToTab(file)];
-    });
-    setActiveTabId(file.id);
-  }
-
-  function closeTab(id: string) {
-    setTabs((prev) => {
-      const next = prev.filter((t) => t.id !== id);
-      if (activeTabId === id) {
-        setActiveTabId(next.length ? next[next.length - 1].id : null);
-      }
-      return next;
-    });
-  }
-
-  function changeContent(id: string, content: string) {
-    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, content } : t)));
-  }
-
   return (
     <div className="ide-shell">
-      <div className="ide-body" data-chat-open={chatOpen}>
+      <ToastHost />
+      <div className="ide-body" data-chat-open={state.ai.chatOpen}>
         <ActivityBar
-          active={activity}
-          chatOpen={chatOpen}
-          onSelect={setActivity}
-          onToggleChat={() => setChatOpen((v) => !v)}
+          active={state.activity}
+          chatOpen={state.ai.chatOpen}
+          onSelect={store.setActivity}
+          onToggleChat={store.toggleChat}
         />
         <Sidebar
-          view={activity === "settings" ? "settings" : activity}
-          selectedFileId={activeTabId}
-          onOpenFile={openFile}
+          view={state.activity}
+          selectedFileId={state.activeTabId}
+          workspaceLabel={state.workspace.rootLabel}
+          onOpenFile={store.openFile}
+          onOpenSettings={() => store.setActivity("settings")}
         />
         <div className="ide-main">
           <EditorArea
             showSettings={showSettings}
-            tabs={tabs}
-            activeTabId={activeTabId}
-            onSelectTab={setActiveTabId}
-            onCloseTab={closeTab}
-            onChangeContent={changeContent}
+            tabs={state.tabs}
+            activeTabId={state.activeTabId}
+            secondaryTabId={state.secondaryTabId}
+            splitEditor={state.splitEditor}
+            onSelectTab={store.selectTab}
+            onCloseTab={store.closeTab}
+            onTogglePin={store.togglePin}
+            onChangeContent={store.changeContent}
+            onToggleSplit={store.toggleSplit}
+            onOpenExplorer={() => store.setActivity("explorer")}
           />
           <BottomPanel
-            collapsed={panelCollapsed}
-            onToggle={() => setPanelCollapsed((c) => !c)}
+            collapsed={state.panelCollapsed}
+            height={state.panelHeight}
+            tab={state.panelTab}
+            onToggle={() => store.setPanelCollapsed(!state.panelCollapsed)}
+            onTab={store.setPanelTab}
+            onResize={store.setPanelHeight}
           />
         </div>
-        <ChatPanel open={chatOpen} contextFile={contextFile} />
+        <ChatPanel open={state.ai.chatOpen} contextFile={contextFile} />
       </div>
       <StatusBar
         fileLabel={showSettings ? "Settings" : activeTab?.path ?? ""}
         language={showSettings ? "" : activeTab?.language ?? ""}
-        providerHint={chatOpen ? "AI ready" : ""}
+        providerId={state.ai.providerId}
+        modelId={state.ai.modelId}
+        chatOpen={state.ai.chatOpen}
+        dirty={Boolean(activeTab?.dirty)}
+        zoom="100%"
       />
     </div>
   );

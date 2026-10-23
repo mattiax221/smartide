@@ -6,6 +6,8 @@ import {
   setApiKey,
   type ProviderInfo,
 } from "../../lib/apiKeys";
+import { useIdeStore } from "../../state/store";
+import { Button, Input } from "../ui";
 
 interface RowState {
   draft: string;
@@ -16,6 +18,7 @@ interface RowState {
 }
 
 export function SettingsView() {
+  const { notifyHostError, pushToast } = useIdeStore();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -42,6 +45,7 @@ export function SettingsView() {
       });
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
+      notifyHostError(e, "Failed to load providers");
     } finally {
       setLoading(false);
     }
@@ -69,12 +73,14 @@ export function SettingsView() {
         draft: "",
         message: "Saved securely.",
       });
+      pushToast("success", "API key saved", provider.name);
       await refresh();
     } catch (e) {
       patchRow(provider.id, {
         saving: false,
         error: e instanceof Error ? e.message : String(e),
       });
+      notifyHostError(e, "Failed to save API key");
     }
   }
 
@@ -91,6 +97,7 @@ export function SettingsView() {
       patchRow(provider.id, {
         error: e instanceof Error ? e.message : String(e),
       });
+      notifyHostError(e, "Failed to reveal API key");
     }
   }
 
@@ -104,12 +111,14 @@ export function SettingsView() {
         reveal: false,
         message: "Key removed.",
       });
+      pushToast("info", "API key cleared", provider.name);
       await refresh();
     } catch (e) {
       patchRow(provider.id, {
         saving: false,
         error: e instanceof Error ? e.message : String(e),
       });
+      notifyHostError(e, "Failed to clear API key");
     }
   }
 
@@ -166,7 +175,7 @@ export function SettingsView() {
 
                 {provider.requires_key && row && (
                   <div className="provider-row__actions">
-                    <input
+                    <Input
                       type={row.reveal ? "text" : "password"}
                       autoComplete="off"
                       spellCheck={false}
@@ -183,31 +192,25 @@ export function SettingsView() {
                     <div className="provider-row__buttons">
                       {provider.has_key && (
                         <>
-                          <button
-                            type="button"
-                            className="btn btn-ghost"
-                            onClick={() => void onReveal(provider)}
-                          >
+                          <Button variant="ghost" onClick={() => void onReveal(provider)}>
                             Reveal
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-danger"
+                          </Button>
+                          <Button
+                            variant="danger"
                             disabled={row.saving}
                             onClick={() => void onClear(provider)}
                           >
                             Clear
-                          </button>
+                          </Button>
                         </>
                       )}
-                      <button
-                        type="button"
-                        className="btn btn-primary"
+                      <Button
+                        variant="primary"
                         disabled={row.saving || !row.draft.trim()}
                         onClick={() => void onSave(provider)}
                       >
                         {row.saving ? "Saving…" : "Save"}
-                      </button>
+                      </Button>
                     </div>
                     {row.error && <p className="settings-error">{row.error}</p>}
                     {row.message && <p className="settings-ok">{row.message}</p>}

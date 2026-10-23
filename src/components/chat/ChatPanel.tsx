@@ -8,6 +8,8 @@ import {
   type ProviderModels,
 } from "../../lib/ai";
 import { listAiProviders, type ProviderInfo } from "../../lib/apiKeys";
+import { useIdeStore } from "../../state/store";
+import { Button, EmptyState, Select } from "../ui";
 
 interface ChatPanelProps {
   open: boolean;
@@ -21,14 +23,16 @@ interface UiMessage {
 }
 
 export function ChatPanel({ open, contextFile }: ChatPanelProps) {
+  const { state, setAiProvider, setAiModel, notifyHostError, pushToast } = useIdeStore();
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [models, setModels] = useState<ProviderModels[]>([]);
-  const [providerId, setProviderId] = useState("ollama");
-  const [modelId, setModelId] = useState("llama3.2");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const providerId = state.ai.providerId;
+  const modelId = state.ai.modelId;
 
   useEffect(() => {
     void (async () => {
@@ -37,13 +41,13 @@ export function ChatPanel({ open, contextFile }: ChatPanelProps) {
         setProviders(p);
         setModels(m);
         const def = pickDefaultProvider(p);
-        setProviderId(def);
         const first = m.find((x) => x.provider_id === def)?.models[0];
-        if (first) setModelId(first.id);
-      } catch {
-        /* browser preview */
+        setAiProvider(def, first?.id);
+      } catch (e) {
+        notifyHostError(e, "Failed to load AI providers");
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once
   }, []);
 
   const providerModels = useMemo(
@@ -53,9 +57,9 @@ export function ChatPanel({ open, contextFile }: ChatPanelProps) {
 
   useEffect(() => {
     if (!providerModels.some((m) => m.id === modelId) && providerModels[0]) {
-      setModelId(providerModels[0].id);
+      setAiModel(providerModels[0].id);
     }
-  }, [providerModels, modelId]);
+  }, [providerModels, modelId, setAiModel]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
@@ -85,14 +89,12 @@ export function ChatPanel({ open, contextFile }: ChatPanelProps) {
         { id: crypto.randomUUID(), role: "assistant", content: res.content },
       ]);
     } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
       setMessages((prev) => [
         ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "error",
-          content: e instanceof Error ? e.message : String(e),
-        },
+        { id: crypto.randomUUID(), role: "error", content: detail },
       ]);
+      notifyHostError(e, "AI request failed");
     } finally {
       setBusy(false);
     }
@@ -105,11 +107,14 @@ export function ChatPanel({ open, contextFile }: ChatPanelProps) {
       <div className="chat-panel__header">
         <h2 className="chat-panel__title">AI Chat</h2>
         <div className="chat-panel__controls">
-          <select
-            className="chat-select"
+          <Select
             value={providerId}
             aria-label="Provider"
-            onChange={(e) => setProviderId(e.target.value)}
+            onChange={(e) => {
+              const id = e.target.value;
+              const first = models.find((x) => x.provider_id === id)?.models[0];
+              setAiProvider(id, first?.id);
+            }}
           >
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
@@ -117,28 +122,30 @@ export function ChatPanel({ open, contextFile }: ChatPanelProps) {
                 {p.requires_key && !p.has_key ? " (key needed)" : ""}
               </option>
             ))}
-          </select>
-          <select
-            className="chat-select"
+          </Select>
+          <Select
             value={modelId}
             aria-label="Model"
-            onChange={(e) => setModelId(e.target.value)}
+            onChange={(e) => setAiModel(e.target.value)}
           >
             {providerModels.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
 
       <div className="chat-messages" ref={listRef}>
-        {messages.length === 0 && (
-          <p className="chat-empty">
-            Ask about the open file or anything coding-related. Keys stay encrypted on the host;
-            Ollama needs no key.
-          </p>
+        {messages.length === 0 && !busy && (
+          <EmptyState
+            title="Start a coding chat"
+            body="Uses encrypted host keys. Ollama needs no key. Open-file context attaches automatically."
+            actionLabel="Clear tip"
+            onAction={() => pushToast("info", "Tip", "Enter sends · Shift+Enter newline")}
+            icon="✦"
+          />
         )}
         {messages.map((m) => (
           <div
@@ -154,7 +161,11 @@ export function ChatPanel({ open, contextFile }: ChatPanelProps) {
         {busy && (
           <div className="chat-bubble chat-bubble--assistant">
             <span className="chat-bubble__role">Assistant</span>
-            Thinking…
+            <div className="chat-skeleton" aria-label="Thinking">
+              <div className="chat-skeleton__line" />
+              <div className="chat-skeleton__line" />
+              <div className="chat-skeleton__line" />
+            </div>
           </div>
         )}
       </div>
@@ -180,14 +191,9 @@ export function ChatPanel({ open, contextFile }: ChatPanelProps) {
               ? `Context: ${contextFile.path}`
               : "No file open — chat without file context"}
           </span>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy || !input.trim()}
-            onClick={() => void send()}
-          >
+          <Button variant="primary" disabled={busy || !input.trim()} onClick={() => void send()}>
             {busy ? "…" : "Send"}
-          </button>
+          </Button>
         </div>
       </div>
     </aside>

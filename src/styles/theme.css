@@ -1,69 +1,113 @@
 :root {
-  /* SmartIDE — charcoal + yellow glass */
+  /* ——— Palette: charcoal + yellow glass ——— */
   --bg-base: #070708;
   --bg-base-mid: #0e0e10;
   --bg-glow: radial-gradient(
-      ellipse 80% 60% at 15% 10%,
-      rgba(245, 197, 24, 0.09),
+      ellipse 80% 60% at 12% 8%,
+      rgba(245, 197, 24, 0.11),
       transparent 55%
     ),
-    radial-gradient(ellipse 70% 50% at 90% 80%, rgba(245, 197, 24, 0.05), transparent 50%),
-    linear-gradient(160deg, #0a0a0c 0%, #121214 45%, #0b0b0d 100%);
+    radial-gradient(ellipse 65% 45% at 92% 88%, rgba(245, 197, 24, 0.055), transparent 50%),
+    linear-gradient(165deg, #09090b 0%, #121214 48%, #0a0a0c 100%);
 
-  --glass: rgba(18, 18, 20, 0.62);
-  --glass-strong: rgba(14, 14, 16, 0.78);
-  --glass-soft: rgba(255, 255, 255, 0.04);
-  --glass-highlight: rgba(255, 255, 255, 0.06);
-  --blur: 18px;
-
-  --bg-editor: transparent;
-  --bg-sidebar: var(--glass);
-  --bg-activity: var(--glass-strong);
-  --bg-title: transparent;
-  --bg-tab: transparent;
-  --bg-tab-active: rgba(245, 197, 24, 0.1);
-  --bg-panel: var(--glass);
-  --bg-input: rgba(0, 0, 0, 0.45);
-  --bg-hover: rgba(245, 197, 24, 0.08);
-  --bg-list-active: rgba(245, 197, 24, 0.14);
-  --bg-status: rgba(10, 10, 12, 0.85);
-  --bg-badge: rgba(245, 197, 24, 0.12);
+  --glass: rgba(16, 16, 18, 0.66);
+  --glass-strong: rgba(12, 12, 14, 0.82);
+  --glass-soft: rgba(255, 255, 255, 0.045);
+  --glass-highlight: rgba(255, 255, 255, 0.07);
+  --blur: 20px;
 
   --fg: #e8e4d9;
-  --fg-muted: #8a8678;
+  --fg-muted: #9a9586;
   --fg-bright: #fff8e7;
   --fg-status: #e8e4d9;
   --fg-link: #f5c518;
 
-  --border: rgba(245, 197, 24, 0.18);
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(245, 197, 24, 0.35);
+  --border: rgba(245, 197, 24, 0.2);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(245, 197, 24, 0.42);
 
   --accent: #f5c518;
   --accent-hover: #ffd84a;
-  --accent-dim: rgba(245, 197, 24, 0.2);
+  --accent-dim: rgba(245, 197, 24, 0.16);
   --accent-text: #1a1500;
 
   --danger: #ff6b6b;
+  --danger-dim: rgba(255, 107, 107, 0.14);
   --success: #7ddea0;
+  --success-dim: rgba(125, 222, 160, 0.14);
   --warning: #f5c518;
+  --info: #7eb8d4;
 
-  --activity-width: 56px;
-  --sidebar-width: 268px;
-  --chat-width: 340px;
+  --bg-editor: transparent;
+  --bg-sidebar: var(--glass);
+  --bg-activity: var(--glass-strong);
+  --bg-tab: transparent;
+  --bg-tab-active: rgba(245, 197, 24, 0.12);
+  --bg-panel: var(--glass);
+  --bg-input: rgba(0, 0, 0, 0.48);
+  --bg-hover: rgba(245, 197, 24, 0.09);
+  --bg-list-active: rgba(245, 197, 24, 0.15);
+  --bg-status: rgba(10, 10, 12, 0.88);
+  --bg-badge: rgba(245, 197, 24, 0.12);
+
+  /* ——— Spacing / density (desktop IDE) ——— */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+  --space-10: 32px;
+
+  --activity-width: 52px;
+  --sidebar-width: 252px;
+  --chat-width: 320px;
   --panel-height: 200px;
-  --statusbar-height: 28px;
-  --titlebar-height: 40px;
-  --tab-height: 40px;
-  --shell-gap: 10px;
-  --shell-pad: 12px;
+  --statusbar-height: 26px;
+  --titlebar-height: 36px;
+  --tab-height: 34px;
+  --shell-gap: 8px;
+  --shell-pad: 10px;
+  --row-height: 28px;
 
+  /* ——— Radius / elevation ——— */
+  --radius: 12px;
+  --radius-sm: 7px;
+  --radius-xs: 4px;
+  --radius-pill: 999px;
+  --elev-1: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --elev-2: 0 8px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --elev-3: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --shadow-glass: var(--elev-2);
+  --shadow-modal: var(--elev-3);
+
+  /* ——— Focus ——— */
+  --focus-ring: 0 0 0 2px var(--bg-base), 0 0 0 4px rgba(245, 197, 24, 0.55);
+
+  /* ——— Typography ——— */
   --font-ui: "IBM Plex Sans", "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+  --fs-10: 10px;
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-15: 15px;
+  --fs-20: 20px;
+  --fs-28: 28px;
+  --lh-tight: 1.25;
+  --lh-ui: 1.4;
+  --track-label: 0.08em;
+  --track-status: 0.04em;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
 
-  --radius: 14px;
-  --radius-sm: 8px;
-  --radius-pill: 999px;
-  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.55);
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+  --dur-slow: 320ms;
 }
