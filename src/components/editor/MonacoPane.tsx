@@ -1,5 +1,6 @@
-import Editor, { loader } from "@monaco-editor/react";
+import Editor, { loader, type OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
+import { useEffect, useRef } from "react";
 import type { SettingsUiState } from "../../state/types";
 
 const THEME_NAME = "smartide-dark";
@@ -40,15 +41,61 @@ loader.init().then((monaco) => {
   defineTheme(monaco);
 });
 
+export interface MonacoReveal {
+  line: number;
+  column?: number;
+}
+
 interface MonacoPaneProps {
   path: string;
   language: string;
   value: string;
   onChange: (value: string) => void;
   settings: SettingsUiState;
+  reveal?: MonacoReveal | null;
+  findTrigger?: number;
+  replaceTrigger?: number;
+  onEditorReady?: (ed: editor.IStandaloneCodeEditor) => void;
 }
 
-export function MonacoPane({ path, language, value, onChange, settings }: MonacoPaneProps) {
+export function MonacoPane({
+  path,
+  language,
+  value,
+  onChange,
+  settings,
+  reveal,
+  findTrigger,
+  replaceTrigger,
+  onEditorReady,
+}: MonacoPaneProps) {
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+
+  const handleMount: OnMount = (ed) => {
+    editorRef.current = ed;
+    onEditorReady?.(ed);
+  };
+
+  useEffect(() => {
+    const ed = editorRef.current;
+    if (!ed || !reveal) return;
+    const line = Math.max(1, reveal.line);
+    const col = Math.max(1, reveal.column ?? 1);
+    ed.revealLineInCenter(line);
+    ed.setPosition({ lineNumber: line, column: col });
+    ed.focus();
+  }, [reveal, path]);
+
+  useEffect(() => {
+    if (!findTrigger) return;
+    editorRef.current?.getAction("actions.find")?.run();
+  }, [findTrigger]);
+
+  useEffect(() => {
+    if (!replaceTrigger) return;
+    editorRef.current?.getAction("editor.action.startFindReplaceAction")?.run();
+  }, [replaceTrigger]);
+
   return (
     <div className="editor-pane" data-path={path}>
       <Editor
@@ -57,6 +104,7 @@ export function MonacoPane({ path, language, value, onChange, settings }: Monaco
         value={value}
         path={path}
         beforeMount={defineTheme}
+        onMount={handleMount}
         onChange={(next) => onChange(next ?? "")}
         options={
           {

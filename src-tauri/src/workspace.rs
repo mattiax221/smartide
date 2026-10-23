@@ -206,3 +206,187 @@ pub fn write_text(state: &WorkspaceState, path: &Path, content: &str) -> Result<
     fs::write(&path, content)?;
     Ok(())
 }
+
+pub fn create_file(state: &WorkspaceState, path: &Path, content: &str) -> Result<(), WorkspaceError> {
+    let root = get_root(state)?.ok_or_else(|| WorkspaceError::Msg("No workspace open".into()))?;
+    let path = ensure_under_root(&root, path)?;
+    if path.exists() {
+        return Err(WorkspaceError::Msg("Already exists".into()));
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&path, content)?;
+    Ok(())
+}
+
+pub fn create_dir(state: &WorkspaceState, path: &Path) -> Result<(), WorkspaceError> {
+    let root = get_root(state)?.ok_or_else(|| WorkspaceError::Msg("No workspace open".into()))?;
+    let path = ensure_under_root(&root, path)?;
+    fs::create_dir_all(&path)?;
+    Ok(())
+}
+
+pub fn rename_path(state: &WorkspaceState, from: &Path, to: &Path) -> Result<(), WorkspaceError> {
+    let root = get_root(state)?.ok_or_else(|| WorkspaceError::Msg("No workspace open".into()))?;
+    let from = ensure_under_root(&root, from)?;
+    let to = ensure_under_root(&root, to)?;
+    if let Some(parent) = to.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::rename(&from, &to)?;
+    Ok(())
+}
+
+pub fn delete_path(state: &WorkspaceState, path: &Path) -> Result<(), WorkspaceError> {
+    let root = get_root(state)?.ok_or_else(|| WorkspaceError::Msg("No workspace open".into()))?;
+    let path = ensure_under_root(&root, path)?;
+    if path == root {
+        return Err(WorkspaceError::Msg("Cannot delete workspace root".into()));
+    }
+    if path.is_dir() {
+        fs::remove_dir_all(&path)?;
+    } else {
+        fs::remove_file(&path)?;
+    }
+    Ok(())
+}
+
+pub fn reveal_in_os(path: &Path) -> Result<(), WorkspaceError> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg("/select,")
+            .arg(path)
+            .spawn()
+            .map_err(|e| WorkspaceError::Msg(e.to_string()))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(path)
+            .spawn()
+            .map_err(|e| WorkspaceError::Msg(e.to_string()))?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let parent = path.parent().unwrap_or(path);
+        std::process::Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(|e| WorkspaceError::Msg(e.to_string()))?;
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchHit {
+    pub path: String,
+    pub line: usize,
+    pub column: usize,
+    pub preview: String,
+}
+
+/// Expand a single `{a,b}` brace group so filters like `*.{ts,tsx}` work.
+fn expand_glob_braces(pattern: &str) -> Vec<String> {
+    if let (Some(start), Some(end)) = (pattern.find('{'), pattern.find('}')) {
+        if end > start {
+            let prefix = &pattern[..start];
+            let suffix = &pattern[end + 1..];
+            let body = &pattern[start + 1..end];
+            return body
+                .split(',')
+                .map(|alt| format!("{prefix}{}{suffix}", alt.trim()))
+                .collect();
+        }
+    }
+    vec![pattern.to_string()]
+}
+
+pub fn search_in_files(
+    state: &WorkspaceState,
+    query: &str,
+    case_sensitive: bool,
+    use_regex: bool,
+    glob_pat: &str,
+) -> Result<Vec<SearchHit>, WorkspaceError> {
+    if query.is_empty() {
+        return Ok(vec![]);
+    }
+    let root = get_root(state)?.ok_or_else(|| WorkspaceError::Msg("No workspace open".into()))?;
+    let matcher = if use_regex {
+        let re = if case_sensitive {
+            regex::Regex::new(query).map_err(|e| WorkspaceError::Msg(e.to_string()))?
+        } else {
+            regex::RegexBuilder::new(query)
+                .case_insensitive(true)
+                .build()
+                .map_err(|e| WorkspaceError::Msg(e.to_string()))?
+        };
+        Some(re)
+    } else {
+        None
+    };
+    let needle = if case_sensitive {
+        query.to_string()
+    } else {
+        query.to_ascii_lowercase()
+    };
+    let patterns = expand_glob_braces(if glob_pat.trim().is_empty() {
+        "**/*"
+    } else {
+        glob_pat
+    });
+    let compiled: Vec<glob::Pattern> = patterns
+        .iter()
+        .filter_map(|p| glob::Pattern::new(p).ok())
+        .collect();
+    let mut hits = Vec::new();
+    let entries = list_tree(&root)?;
+    for entry in entries {
+        if entry.kind != "file" {
+            continue;
+        }
+        let rel = Path::new(&entry.path)
+            .strip_prefix(&root)
+            .unwrap_or(Path::new(&entry.name));
+        let rel_s = rel.to_string_lossy().replace('\\', "/");
+        if !compiled.is_empty() {
+            let ok = compiled
+                .iter()
+                .any(|g| g.matches(&rel_s) || g.matches(entry.name.as_str()));
+            if !ok {
+                continue;
+            }
+        }
+        let Ok(text) = fs::read_to_string(&entry.path) else {
+            continue;
+        };
+        if text.len() > 500_000 {
+            continue;
+        }
+        for (i, line) in text.lines().enumerate() {
+            if hits.len() >= 200 {
+                return Ok(hits);
+            }
+            let matched = if let Some(re) = &matcher {
+                re.find(line).map(|m| m.start())
+            } else if case_sensitive {
+                line.find(&needle)
+            } else {
+                line.to_ascii_lowercase().find(&needle)
+            };
+            if let Some(col) = matched {
+                let preview: String = line.chars().take(200).collect();
+                hits.push(SearchHit {
+                    path: entry.path.clone(),
+                    line: i + 1,
+                    column: col + 1,
+                    preview,
+                });
+            }
+        }
+    }
+    Ok(hits)
+}

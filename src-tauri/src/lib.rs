@@ -1,14 +1,33 @@
 mod ai;
 mod secrets;
+mod terminal;
 mod workspace;
 
 use ai::{ChatRequest, ChatResponse, ProviderModels};
 use secrets::ProviderInfo;
 use std::path::PathBuf;
-use tauri::Manager;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+use tauri::{Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tracing::{error, info, warn};
-use workspace::{FsEntry, WorkspaceState};
+use workspace::{FsEntry, SearchHit, WorkspaceState};
+
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+
+struct WatchState {
+    watcher: Mutex<Option<RecommendedWatcher>>,
+    last_emit: Mutex<Instant>,
+}
+
+impl Default for WatchState {
+    fn default() -> Self {
+        Self {
+            watcher: Mutex::new(None),
+            last_emit: Mutex::new(Instant::now() - Duration::from_secs(10)),
+        }
+    }
+}
 
 fn app_data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
@@ -102,8 +121,6 @@ async fn ai_chat(app: tauri::AppHandle, request: ChatRequest) -> Result<ChatResp
     }
 }
 
-/// Native folder picker (host-side). Prefer this over the JS dialog package
-/// so the frontend does not need `@tauri-apps/plugin-dialog`.
 #[tauri::command]
 async fn pick_workspace_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -120,25 +137,62 @@ async fn pick_workspace_folder(app: tauri::AppHandle) -> Result<Option<String>, 
 
 #[tauri::command]
 fn open_workspace(
-    state: tauri::State<'_, WorkspaceState>,
+    app: tauri::AppHandle,
+    state: State<'_, WorkspaceState>,
+    watch: State<'_, WatchState>,
     path: String,
 ) -> Result<Vec<FsEntry>, String> {
     let root = PathBuf::from(&path);
     workspace::set_root(&state, root.clone())?;
     info!(path = %path, "open_workspace");
+    start_watch_inner(&app, &watch, &root)?;
     workspace::list_tree(&root).map_err(Into::into)
 }
 
+fn start_watch_inner(
+    app: &tauri::AppHandle,
+    watch: &WatchState,
+    root: &PathBuf,
+) -> Result<(), String> {
+    let app2 = app.clone();
+    let last = std::sync::Arc::new(Mutex::new(Instant::now() - Duration::from_secs(10)));
+    let last2 = last.clone();
+    let mut watcher = RecommendedWatcher::new(
+        move |res: Result<notify::Event, notify::Error>| {
+            if res.is_err() {
+                return;
+            }
+            let mut slot = match last2.lock() {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+            if slot.elapsed() < Duration::from_millis(400) {
+                return;
+            }
+            *slot = Instant::now();
+            let _ = app2.emit("workspace-changed", ());
+        },
+        Config::default(),
+    )
+    .map_err(|e| e.to_string())?;
+    watcher
+        .watch(root, RecursiveMode::Recursive)
+        .map_err(|e| e.to_string())?;
+    *watch.watcher.lock().map_err(|e| e.to_string())? = Some(watcher);
+    *watch.last_emit.lock().map_err(|e| e.to_string())? = Instant::now();
+    let _ = last;
+    Ok(())
+}
+
 #[tauri::command]
-fn list_workspace(state: tauri::State<'_, WorkspaceState>) -> Result<Vec<FsEntry>, String> {
-    let root = workspace::get_root(&state)?
-        .ok_or_else(|| "No workspace open".to_string())?;
+fn list_workspace(state: State<'_, WorkspaceState>) -> Result<Vec<FsEntry>, String> {
+    let root = workspace::get_root(&state)?.ok_or_else(|| "No workspace open".to_string())?;
     workspace::list_tree(&root).map_err(Into::into)
 }
 
 #[tauri::command]
 fn read_workspace_file(
-    state: tauri::State<'_, WorkspaceState>,
+    state: State<'_, WorkspaceState>,
     path: String,
 ) -> Result<String, String> {
     workspace::read_text(&state, PathBuf::from(path).as_path()).map_err(Into::into)
@@ -146,7 +200,7 @@ fn read_workspace_file(
 
 #[tauri::command]
 fn write_workspace_file(
-    state: tauri::State<'_, WorkspaceState>,
+    state: State<'_, WorkspaceState>,
     path: String,
     content: String,
 ) -> Result<(), String> {
@@ -155,9 +209,99 @@ fn write_workspace_file(
 }
 
 #[tauri::command]
-fn workspace_root(state: tauri::State<'_, WorkspaceState>) -> Result<Option<String>, String> {
-    Ok(workspace::get_root(&state)?
-        .map(|p| p.to_string_lossy().to_string()))
+fn workspace_root(state: State<'_, WorkspaceState>) -> Result<Option<String>, String> {
+    Ok(workspace::get_root(&state)?.map(|p| p.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+fn create_workspace_file(
+    state: State<'_, WorkspaceState>,
+    path: String,
+    content: Option<String>,
+) -> Result<(), String> {
+    workspace::create_file(
+        &state,
+        PathBuf::from(path).as_path(),
+        content.as_deref().unwrap_or(""),
+    )
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+fn create_workspace_dir(state: State<'_, WorkspaceState>, path: String) -> Result<(), String> {
+    workspace::create_dir(&state, PathBuf::from(path).as_path()).map_err(Into::into)
+}
+
+#[tauri::command]
+fn rename_workspace_path(
+    state: State<'_, WorkspaceState>,
+    from: String,
+    to: String,
+) -> Result<(), String> {
+    workspace::rename_path(
+        &state,
+        PathBuf::from(from).as_path(),
+        PathBuf::from(to).as_path(),
+    )
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+fn delete_workspace_path(state: State<'_, WorkspaceState>, path: String) -> Result<(), String> {
+    workspace::delete_path(&state, PathBuf::from(path).as_path()).map_err(Into::into)
+}
+
+#[tauri::command]
+fn reveal_in_os(path: String) -> Result<(), String> {
+    workspace::reveal_in_os(PathBuf::from(path).as_path()).map_err(Into::into)
+}
+
+#[tauri::command]
+fn search_workspace(
+    state: State<'_, WorkspaceState>,
+    query: String,
+    case_sensitive: bool,
+    use_regex: bool,
+    glob: String,
+) -> Result<Vec<SearchHit>, String> {
+    workspace::search_in_files(&state, &query, case_sensitive, use_regex, &glob)
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+fn terminal_create(
+    app: tauri::AppHandle,
+    terms: State<'_, terminal::TerminalState>,
+    ws: State<'_, WorkspaceState>,
+    cols: u16,
+    rows: u16,
+) -> Result<String, String> {
+    let cwd = workspace::get_root(&ws)?.map(|p| p.to_string_lossy().into_owned());
+    terminal::create_session(&terms, app, cwd, cols, rows)
+}
+
+#[tauri::command]
+fn terminal_write(
+    terms: State<'_, terminal::TerminalState>,
+    id: String,
+    data: String,
+) -> Result<(), String> {
+    terminal::write_session(&terms, &id, &data)
+}
+
+#[tauri::command]
+fn terminal_resize(
+    terms: State<'_, terminal::TerminalState>,
+    id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), String> {
+    terminal::resize_session(&terms, &id, cols, rows)
+}
+
+#[tauri::command]
+fn terminal_kill(terms: State<'_, terminal::TerminalState>, id: String) -> Result<(), String> {
+    terminal::kill_session(&terms, &id)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -168,6 +312,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(WorkspaceState::default())
+        .manage(WatchState::default())
+        .manage(terminal::TerminalState::default())
         .invoke_handler(tauri::generate_handler![
             list_ai_providers,
             set_api_key,
@@ -181,7 +327,17 @@ pub fn run() {
             list_workspace,
             read_workspace_file,
             write_workspace_file,
-            workspace_root
+            workspace_root,
+            create_workspace_file,
+            create_workspace_dir,
+            rename_workspace_path,
+            delete_workspace_path,
+            reveal_in_os,
+            search_workspace,
+            terminal_create,
+            terminal_write,
+            terminal_resize,
+            terminal_kill
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

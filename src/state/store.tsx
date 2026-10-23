@@ -47,7 +47,13 @@ type Action =
   | { type: "dismissToast"; id: string }
   | { type: "setHostBanner"; message: string | null }
   | { type: "setHelpOpen"; open: boolean }
-  | { type: "cycleTab"; dir: 1 | -1 };
+  | { type: "setQuickOpen"; open: boolean }
+  | { type: "cycleTab"; dir: 1 | -1 }
+  | { type: "reorderTabs"; from: number; to: number }
+  | { type: "closeOtherTabs"; id: string }
+  | { type: "closeTabsToRight"; id: string }
+  | { type: "navBack" }
+  | { type: "navForward" };
 
 const initialState: IdeState = {
   activity: "explorer",
@@ -78,7 +84,17 @@ const initialState: IdeState = {
   toasts: [],
   hostBanner: null,
   helpOpen: false,
+  quickOpen: false,
+  navHistory: [],
+  navIndex: -1,
 };
+
+function pushNav(state: IdeState, id: string): IdeState {
+  if (state.activeTabId === id) return state;
+  const trimmed = state.navHistory.slice(0, state.navIndex + 1);
+  const navHistory = [...trimmed, id].slice(-50);
+  return { ...state, activeTabId: id, navHistory, navIndex: navHistory.length - 1 };
+}
 
 function demoToTab(file: DemoFile): OpenTab {
   return {
@@ -138,29 +154,21 @@ function reducer(state: IdeState, action: Action): IdeState {
     case "openDemoFile": {
       if (action.file.kind !== "file") return state;
       const exists = state.tabs.some((t) => t.id === action.file.id);
-      return {
-        ...state,
-        activity: "explorer",
-        tabs: exists ? state.tabs : [...state.tabs, demoToTab(action.file)],
-        activeTabId: action.file.id,
-      };
+      const tabs = exists ? state.tabs : [...state.tabs, demoToTab(action.file)];
+      return pushNav({ ...state, activity: "explorer", tabs }, action.file.id);
     }
     case "openRealFile": {
       const exists = state.tabs.some((t) => t.id === action.entry.path);
-      return {
-        ...state,
-        activity: "explorer",
-        tabs: exists
-          ? state.tabs
-          : [...state.tabs, realToTab(action.entry, action.content)],
-        activeTabId: action.entry.path,
-      };
+      const tabs = exists
+        ? state.tabs
+        : [...state.tabs, realToTab(action.entry, action.content)];
+      return pushNav({ ...state, activity: "explorer", tabs }, action.entry.path);
     }
     case "selectTab":
       if (action.pane === "secondary") {
         return { ...state, secondaryTabId: action.id };
       }
-      return { ...state, activeTabId: action.id };
+      return pushNav(state, action.id);
     case "closeTab": {
       const tabs = state.tabs.filter((t) => t.id !== action.id);
       let activeTabId = state.activeTabId;
@@ -259,7 +267,53 @@ function reducer(state: IdeState, action: Action): IdeState {
       const idx = state.tabs.findIndex((t) => t.id === state.activeTabId);
       const next =
         state.tabs[(idx + action.dir + state.tabs.length) % state.tabs.length];
-      return { ...state, activeTabId: next.id };
+      return pushNav(state, next.id);
+    }
+    case "setQuickOpen":
+      return { ...state, quickOpen: action.open };
+    case "reorderTabs": {
+      const tabs = [...state.tabs];
+      if (
+        action.from < 0 ||
+        action.to < 0 ||
+        action.from >= tabs.length ||
+        action.to >= tabs.length
+      ) {
+        return state;
+      }
+      const [moved] = tabs.splice(action.from, 1);
+      tabs.splice(action.to, 0, moved);
+      return { ...state, tabs };
+    }
+    case "closeOtherTabs":
+      return {
+        ...state,
+        tabs: state.tabs.filter((t) => t.id === action.id || t.pinned),
+        activeTabId: action.id,
+        secondaryTabId:
+          state.secondaryTabId === action.id ? state.secondaryTabId : null,
+      };
+    case "closeTabsToRight": {
+      const idx = state.tabs.findIndex((t) => t.id === action.id);
+      if (idx < 0) return state;
+      return {
+        ...state,
+        tabs: state.tabs.filter((t, i) => i <= idx || t.pinned),
+      };
+    }
+    case "navBack": {
+      if (state.navIndex <= 0) return state;
+      const navIndex = state.navIndex - 1;
+      const id = state.navHistory[navIndex];
+      if (!state.tabs.some((t) => t.id === id)) return state;
+      return { ...state, navIndex, activeTabId: id };
+    }
+    case "navForward": {
+      if (state.navIndex >= state.navHistory.length - 1) return state;
+      const navIndex = state.navIndex + 1;
+      const id = state.navHistory[navIndex];
+      if (!state.tabs.some((t) => t.id === id)) return state;
+      return { ...state, navIndex, activeTabId: id };
     }
     default:
       return state;
@@ -291,7 +345,13 @@ interface IdeStoreApi {
   setHostBanner: (message: string | null) => void;
   notifyHostError: (err: unknown, fallback?: string) => void;
   setHelpOpen: (open: boolean) => void;
+  setQuickOpen: (open: boolean) => void;
   cycleTab: (dir: 1 | -1) => void;
+  reorderTabs: (from: number, to: number) => void;
+  closeOtherTabs: (id: string) => void;
+  closeTabsToRight: (id: string) => void;
+  navBack: () => void;
+  navForward: () => void;
 }
 
 const IdeStoreContext = createContext<IdeStoreApi | null>(null);
@@ -338,7 +398,13 @@ export function IdeStoreProvider({ children }: { children: ReactNode }) {
       setHostBanner: (message) => dispatch({ type: "setHostBanner", message }),
       notifyHostError,
       setHelpOpen: (open) => dispatch({ type: "setHelpOpen", open }),
+      setQuickOpen: (open) => dispatch({ type: "setQuickOpen", open }),
       cycleTab: (dir) => dispatch({ type: "cycleTab", dir }),
+      reorderTabs: (from, to) => dispatch({ type: "reorderTabs", from, to }),
+      closeOtherTabs: (id) => dispatch({ type: "closeOtherTabs", id }),
+      closeTabsToRight: (id) => dispatch({ type: "closeTabsToRight", id }),
+      navBack: () => dispatch({ type: "navBack" }),
+      navForward: () => dispatch({ type: "navForward" }),
     }),
     [state, pushToast, notifyHostError],
   );

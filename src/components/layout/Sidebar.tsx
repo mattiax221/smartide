@@ -1,8 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { DEMO_TREE, type DemoFile } from "../../lib/demoFiles";
-import type { FsEntry } from "../../lib/workspace";
+import { basename, type FsEntry } from "../../lib/workspace";
+import { SearchPanel } from "../search/SearchPanel";
+import type { SearchHit } from "../../lib/workspace";
 import { IconFile, IconFolder } from "../icons";
-import { Button, EmptyState } from "../ui";
+import { Button, EmptyState, Tooltip } from "../ui";
 import type { ActivityView } from "./ActivityView";
 
 interface SidebarProps {
@@ -18,6 +20,13 @@ interface SidebarProps {
   onOpenRecent: (path: string) => void;
   onRefresh: () => void;
   onOpenSettings: () => void;
+  onNewFile: (parentDir: string) => void;
+  onNewFolder: (parentDir: string) => void;
+  onRename: (entry: FsEntry) => void;
+  onDelete: (entry: FsEntry) => void;
+  onReveal: (path: string) => void;
+  onSearchHit: (hit: SearchHit) => void;
+  onError: (err: unknown) => void;
 }
 
 function fileIconClass(name: string): string {
@@ -64,6 +73,12 @@ function depthOf(entry: FsEntry, byId: Map<string, FsEntry>): number {
   return d;
 }
 
+interface CtxMenu {
+  x: number;
+  y: number;
+  entry: FsEntry | null;
+}
+
 export function Sidebar({
   view,
   selectedFileId,
@@ -77,26 +92,71 @@ export function Sidebar({
   onOpenRecent,
   onRefresh,
   onOpenSettings,
+  onNewFile,
+  onNewFolder,
+  onRename,
+  onDelete,
+  onReveal,
+  onSearchHit,
+  onError,
 }: SidebarProps) {
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
+  const [menu, setMenu] = useState<CtxMenu | null>(null);
+
+  function openMenu(e: React.MouseEvent, entry: FsEntry | null) {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ x: e.clientX, y: e.clientY, entry });
+  }
+
+  function closeMenu() {
+    setMenu(null);
+  }
+
+  const parentForNew = menu?.entry
+    ? menu.entry.kind === "folder"
+      ? menu.entry.path
+      : menu.entry.parent
+        ? byId.get(menu.entry.parent)?.path ?? workspaceRoot
+        : workspaceRoot
+    : workspaceRoot;
 
   return (
-    <aside className="sidebar" data-view={view} aria-label="Sidebar">
+    <aside className="sidebar" data-view={view} aria-label="Sidebar" onClick={closeMenu}>
       {view === "explorer" && (
         <>
           <div className="sidebar__header">
             <span>Explorer</span>
             <span>{workspaceLabel}</span>
           </div>
-          <div className="sidebar__body" role="tree" aria-label="File explorer">
+          <div
+            className="sidebar__body"
+            role="tree"
+            aria-label="File explorer"
+            onContextMenu={(e) => {
+              if (workspaceRoot) openMenu(e, null);
+            }}
+          >
             <div className="sidebar-actions">
               <Button variant="primary" onClick={onOpenFolder}>
                 Open Folder
               </Button>
               {workspaceRoot ? (
-                <Button variant="ghost" onClick={onRefresh}>
-                  Refresh
-                </Button>
+                <>
+                  <Tooltip label="New file" side="bottom">
+                    <Button variant="ghost" onClick={() => onNewFile(workspaceRoot)}>
+                      +File
+                    </Button>
+                  </Tooltip>
+                  <Tooltip label="New folder" side="bottom">
+                    <Button variant="ghost" onClick={() => onNewFolder(workspaceRoot)}>
+                      +Dir
+                    </Button>
+                  </Tooltip>
+                  <Button variant="ghost" onClick={onRefresh}>
+                    Refresh
+                  </Button>
+                </>
               ) : null}
             </div>
 
@@ -112,6 +172,8 @@ export function Sidebar({
                         role="treeitem"
                         aria-expanded
                         style={{ paddingLeft: 10 + depth * 12 }}
+                        onContextMenu={(e) => openMenu(e, entry)}
+                        draggable={false}
                       >
                         <IconFolder />
                         <span>{entry.name}</span>
@@ -127,6 +189,13 @@ export function Sidebar({
                       aria-selected={selectedFileId === entry.id}
                       style={{ paddingLeft: 10 + depth * 12 }}
                       onClick={() => onOpenFsEntry(entry)}
+                      onContextMenu={(e) => openMenu(e, entry)}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("application/x-smartide-path", entry.path);
+                        e.dataTransfer.setData("text/plain", entry.path);
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
                     >
                       <IconFile className={fileIconClass(entry.name)} />
                       <span>{entry.name}</span>
@@ -182,28 +251,97 @@ export function Sidebar({
                     title={path}
                     onClick={() => onOpenRecent(path)}
                   >
-                    <span className="tree-item__path">{path}</span>
+                    <span className="tree-item__path">{basename(path) || path}</span>
                   </button>
                 ))}
               </CollapsibleSection>
             )}
           </div>
+
+          {menu && workspaceRoot && (
+            <div
+              className="ctx-menu"
+              style={{ left: menu.x, top: menu.y }}
+              role="menu"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  if (parentForNew) onNewFile(parentForNew);
+                  closeMenu();
+                }}
+              >
+                New File
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  if (parentForNew) onNewFolder(parentForNew);
+                  closeMenu();
+                }}
+              >
+                New Folder
+              </button>
+              {menu.entry && (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onRename(menu.entry!);
+                      closeMenu();
+                    }}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onDelete(menu.entry!);
+                      closeMenu();
+                    }}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onReveal(menu.entry!.path);
+                      closeMenu();
+                    }}
+                  >
+                    Reveal in OS
+                  </button>
+                </>
+              )}
+              {!menu.entry && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onReveal(workspaceRoot);
+                    closeMenu();
+                  }}
+                >
+                  Reveal workspace
+                </button>
+              )}
+            </div>
+          )}
         </>
       )}
 
       {view === "search" && (
-        <>
-          <div className="sidebar__header">
-            <span>Search</span>
-          </div>
-          <div className="sidebar__body">
-            <EmptyState
-              title="Search coming soon"
-              body="Fuzzy file open and in-files search land in Fase F."
-              icon="⌕"
-            />
-          </div>
-        </>
+        <SearchPanel
+          hasWorkspace={Boolean(workspaceRoot)}
+          onOpenHit={onSearchHit}
+          onError={onError}
+        />
       )}
       {view === "git" && (
         <>

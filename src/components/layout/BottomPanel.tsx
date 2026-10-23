@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { TerminalPane } from "../terminal/TerminalPane";
 import { Button } from "../ui";
 
 type PanelTab = "terminal" | "problems" | "output";
@@ -10,13 +11,8 @@ interface BottomPanelProps {
   onToggle: () => void;
   onTab: (tab: PanelTab) => void;
   onResize: (height: number) => void;
+  onError: (err: unknown) => void;
 }
-
-const PLACEHOLDER: Record<PanelTab, string> = {
-  terminal: "Terminal stub — PTY integration lands in Fase G.",
-  problems: "No problems detected in the workspace.",
-  output: "[SmartIDE] Ready.\n[SmartIDE] Configure AI keys in Settings · chat via spark icon.",
-};
 
 export function BottomPanel({
   collapsed,
@@ -25,6 +21,7 @@ export function BottomPanel({
   onToggle,
   onTab,
   onResize,
+  onError,
 }: BottomPanelProps) {
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
 
@@ -86,8 +83,17 @@ export function BottomPanel({
         </div>
       </div>
       {!collapsed && (
-        <div className={`panel-body${tab === "problems" ? " panel-body--empty" : ""}`}>
-          {PLACEHOLDER[tab]}
+        <div
+          className={`panel-body${tab === "problems" ? " panel-body--empty" : ""}${
+            tab === "terminal" ? " panel-body--terminal" : ""
+          }`}
+        >
+          {tab === "terminal" && (
+            <TerminalPane active={!collapsed && tab === "terminal"} onError={onError} />
+          )}
+          {tab === "problems" && "No problems detected in the workspace."}
+          {tab === "output" &&
+            "[SmartIDE] Ready.\n[SmartIDE] Configure AI keys in Settings · chat via spark icon."}
         </div>
       )}
     </section>

@@ -61,4 +61,7 @@ export interface IdeState {
   toasts: Toast[];
   hostBanner: string | null;
   helpOpen: boolean;
+  quickOpen: boolean;
+  navHistory: string[];
+  navIndex: number;
 }
