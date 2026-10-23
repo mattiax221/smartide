@@ -1,0 +1,43 @@
+:root {
+  /* VS Code Dark+ inspired palette */
+  --bg-editor: #1e1e1e;
+  --bg-sidebar: #252526;
+  --bg-activity: #333333;
+  --bg-title: #3c3c3c;
+  --bg-tab: #2d2d2d;
+  --bg-tab-active: #1e1e1e;
+  --bg-panel: #1e1e1e;
+  --bg-input: #3c3c3c;
+  --bg-hover: #2a2d2e;
+  --bg-list-active: #37373d;
+  --bg-status: #007acc;
+  --bg-status-alt: #16825d;
+  --bg-badge: #4d4d4d;
+
+  --fg: #cccccc;
+  --fg-muted: #858585;
+  --fg-bright: #ffffff;
+  --fg-status: #ffffff;
+  --fg-link: #3794ff;
+
+  --border: #3c3c3c;
+  --border-subtle: #2b2b2b;
+  --accent: #007acc;
+  --accent-hover: #1c8ad4;
+  --danger: #f14c4c;
+  --success: #89d185;
+  --warning: #cca700;
+
+  --activity-width: 48px;
+  --sidebar-width: 260px;
+  --panel-height: 180px;
+  --statusbar-height: 22px;
+  --titlebar-height: 35px;
+  --tab-height: 35px;
+
+  --font-ui: "IBM Plex Sans", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+
+  --radius: 2px;
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
