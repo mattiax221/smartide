@@ -6,6 +6,7 @@ use ai::{ChatRequest, ChatResponse, ProviderModels};
 use secrets::ProviderInfo;
 use std::path::PathBuf;
 use tauri::Manager;
+use tauri_plugin_dialog::DialogExt;
 use tracing::{error, info, warn};
 use workspace::{FsEntry, WorkspaceState};
 
@@ -101,6 +102,22 @@ async fn ai_chat(app: tauri::AppHandle, request: ChatRequest) -> Result<ChatResp
     }
 }
 
+/// Native folder picker (host-side). Prefer this over the JS dialog package
+/// so the frontend does not need `@tauri-apps/plugin-dialog`.
+#[tauri::command]
+async fn pick_workspace_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .blocking_pick_folder()
+            .and_then(|p| p.into_path().ok())
+            .map(|p| p.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| format!("dialog task: {e}"))?;
+    Ok(result)
+}
+
 #[tauri::command]
 fn open_workspace(
     state: tauri::State<'_, WorkspaceState>,
@@ -159,6 +176,7 @@ pub fn run() {
             has_api_key,
             list_ai_models,
             ai_chat,
+            pick_workspace_folder,
             open_workspace,
             list_workspace,
             read_workspace_file,

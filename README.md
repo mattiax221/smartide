@@ -38,6 +38,8 @@ Alternatively: `rustup default stable-x86_64-pc-windows-gnu` + MinGW (not the re
 
 ## Setup
 
+After every pull (required — new deps break Vite until install):
+
 ```bash
 npm install
 ```

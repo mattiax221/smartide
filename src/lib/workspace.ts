@@ -1,4 +1,3 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface FsEntry {
@@ -14,10 +13,10 @@ function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+/** Opens the native folder dialog via Rust (`pick_workspace_folder`). */
 export async function pickFolder(): Promise<string | null> {
   if (!isTauri()) return null;
-  const selected = await open({ directory: true, multiple: false });
-  if (!selected || Array.isArray(selected)) return null;
+  const selected = await invoke<string | null>("pick_workspace_folder");
   return selected;
 }
 
