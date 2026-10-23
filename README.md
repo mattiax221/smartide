@@ -2,7 +2,7 @@
 
 Desktop IDE scaffold built with **Tauri 2** (Rust), **React + TypeScript + Vite**, and **Monaco Editor**. Layout mirrors VS Code (activity bar, sidebar explorer, editor tabs, bottom panel, status bar) with a Dark+ inspired theme.
 
-AI coding foundations are stubbed: Settings UI for multi-provider API keys, plus secure encrypted storage commands on the Rust side. Provider chat/completion clients are not wired yet.
+Glassmorphic charcoal + yellow UI (not a VS Code clone). Multi-provider AI chat is wired: Ollama (local), Groq, Gemini, OpenRouter, OpenAI, Anthropic — keys stay encrypted in the Tauri host and are used by the `ai_chat` command.
 
 ## Prerequisites
 
@@ -57,17 +57,16 @@ src-tauri/            Rust / Tauri shell
   src/lib.rs          Tauri commands
 ```
 
-### Tauri commands (API keys)
+### Tauri commands
 
 | Command | Purpose |
 |---------|---------|
 | `list_ai_providers` | Known providers + whether a key is stored |
-| `set_api_key` | Encrypt and persist a key |
-| `get_api_key` | Reveal a stored key (settings only) |
-| `delete_api_key` | Remove a key |
-| `has_api_key` | Boolean check |
+| `set_api_key` / `get_api_key` / `delete_api_key` / `has_api_key` | Secure key CRUD |
+| `list_ai_models` | Default models per provider |
+| `ai_chat` | Chat completions (keys never leave the host) |
 
-Providers stubbed: OpenAI, Anthropic, Google Gemini, Groq, OpenRouter, Ollama (local, no key).
+Providers: OpenAI, Anthropic, Google Gemini, Groq, OpenRouter, Ollama (local, no key). Open the spark icon for the chat panel; the active editor file is attached as context when present.
 
 ## License
 

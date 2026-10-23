@@ -115,10 +115,13 @@ export function SettingsView() {
 
   return (
     <div className="settings-view">
-      <h1 className="settings-view__title">Settings</h1>
+      <h1 className="settings-view__title">
+        Set<span>tings</span>
+      </h1>
       <p className="settings-view__subtitle">
         Configure API keys for AI coding providers. Keys are encrypted at rest (AES-256-GCM) with a
-        master key in the OS credential store when available.
+        master key in the OS credential store when available. Chat uses these keys from the host —
+        they are not sent to the renderer except when you Reveal.
       </p>
 
       <section className="settings-section" aria-labelledby="ai-providers-heading">
@@ -216,9 +219,9 @@ export function SettingsView() {
       </section>
 
       <p className="settings-note">
-        Provider chat/completion wiring is intentionally stubbed. This scaffold stores keys securely
-        and exposes Tauri commands (<code>list_ai_providers</code>, <code>set_api_key</code>,{" "}
-        <code>get_api_key</code>, <code>delete_api_key</code>) for future AI features.
+        Chat completions are wired for Ollama (local), Groq, Gemini, OpenRouter, OpenAI, and
+        Anthropic via <code>ai_chat</code>. Open the spark icon in the activity bar to chat; the
+        open editor file is attached as context when present.
       </p>
     </div>
   );

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import type { ContextFile } from "../../lib/ai";
 import type { DemoFile } from "../../lib/demoFiles";
+import { ChatPanel } from "../chat/ChatPanel";
 import { ActivityBar, type ActivityView } from "./ActivityBar";
 import { BottomPanel } from "./BottomPanel";
 import { demoFileToTab, EditorArea, type OpenTab } from "./EditorArea";
@@ -11,6 +13,7 @@ export function IdeShell() {
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
 
   const showSettings = activity === "settings";
 
@@ -18,6 +21,15 @@ export function IdeShell() {
     () => tabs.find((t) => t.id === activeTabId) ?? null,
     [tabs, activeTabId],
   );
+
+  const contextFile: ContextFile | null = useMemo(() => {
+    if (!activeTab || showSettings) return null;
+    return {
+      path: activeTab.path,
+      language: activeTab.language,
+      content: activeTab.content,
+    };
+  }, [activeTab, showSettings]);
 
   function openFile(file: DemoFile) {
     if (file.kind !== "file") return;
@@ -45,8 +57,13 @@ export function IdeShell() {
 
   return (
     <div className="ide-shell">
-      <div className="ide-body">
-        <ActivityBar active={activity} onSelect={setActivity} />
+      <div className="ide-body" data-chat-open={chatOpen}>
+        <ActivityBar
+          active={activity}
+          chatOpen={chatOpen}
+          onSelect={setActivity}
+          onToggleChat={() => setChatOpen((v) => !v)}
+        />
         <Sidebar
           view={activity === "settings" ? "settings" : activity}
           selectedFileId={activeTabId}
@@ -66,10 +83,12 @@ export function IdeShell() {
             onToggle={() => setPanelCollapsed((c) => !c)}
           />
         </div>
+        <ChatPanel open={chatOpen} contextFile={contextFile} />
       </div>
       <StatusBar
         fileLabel={showSettings ? "Settings" : activeTab?.path ?? ""}
         language={showSettings ? "" : activeTab?.language ?? ""}
+        providerHint={chatOpen ? "AI ready" : ""}
       />
     </div>
   );

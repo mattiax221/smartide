@@ -51,6 +51,16 @@ export function IconSettings({ title }: IconProps) {
   );
 }
 
+export function IconSpark({ title }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden={!title}>
+      {title ? <title>{title}</title> : null}
+      <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" />
+      <path d="M18 14l.9 2.6L21.5 17.5l-2.6.9L18 21l-.9-2.6L14.5 17.5l2.6-.9L18 14z" />
+    </svg>
+  );
+}
+
 export function IconFolder({ title }: IconProps) {
   return (
     <svg className="tree-item__icon tree-item__icon--folder" viewBox="0 0 16 16" fill="currentColor" aria-hidden={!title}>

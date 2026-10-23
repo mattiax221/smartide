@@ -1,43 +1,69 @@
 :root {
-  /* VS Code Dark+ inspired palette */
-  --bg-editor: #1e1e1e;
-  --bg-sidebar: #252526;
-  --bg-activity: #333333;
-  --bg-title: #3c3c3c;
-  --bg-tab: #2d2d2d;
-  --bg-tab-active: #1e1e1e;
-  --bg-panel: #1e1e1e;
-  --bg-input: #3c3c3c;
-  --bg-hover: #2a2d2e;
-  --bg-list-active: #37373d;
-  --bg-status: #007acc;
-  --bg-status-alt: #16825d;
-  --bg-badge: #4d4d4d;
+  /* SmartIDE — charcoal + yellow glass */
+  --bg-base: #070708;
+  --bg-base-mid: #0e0e10;
+  --bg-glow: radial-gradient(
+      ellipse 80% 60% at 15% 10%,
+      rgba(245, 197, 24, 0.09),
+      transparent 55%
+    ),
+    radial-gradient(ellipse 70% 50% at 90% 80%, rgba(245, 197, 24, 0.05), transparent 50%),
+    linear-gradient(160deg, #0a0a0c 0%, #121214 45%, #0b0b0d 100%);
 
-  --fg: #cccccc;
-  --fg-muted: #858585;
-  --fg-bright: #ffffff;
-  --fg-status: #ffffff;
-  --fg-link: #3794ff;
+  --glass: rgba(18, 18, 20, 0.62);
+  --glass-strong: rgba(14, 14, 16, 0.78);
+  --glass-soft: rgba(255, 255, 255, 0.04);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
+  --blur: 18px;
 
-  --border: #3c3c3c;
-  --border-subtle: #2b2b2b;
-  --accent: #007acc;
-  --accent-hover: #1c8ad4;
-  --danger: #f14c4c;
-  --success: #89d185;
-  --warning: #cca700;
+  --bg-editor: transparent;
+  --bg-sidebar: var(--glass);
+  --bg-activity: var(--glass-strong);
+  --bg-title: transparent;
+  --bg-tab: transparent;
+  --bg-tab-active: rgba(245, 197, 24, 0.1);
+  --bg-panel: var(--glass);
+  --bg-input: rgba(0, 0, 0, 0.45);
+  --bg-hover: rgba(245, 197, 24, 0.08);
+  --bg-list-active: rgba(245, 197, 24, 0.14);
+  --bg-status: rgba(10, 10, 12, 0.85);
+  --bg-badge: rgba(245, 197, 24, 0.12);
 
-  --activity-width: 48px;
-  --sidebar-width: 260px;
-  --panel-height: 180px;
-  --statusbar-height: 22px;
-  --titlebar-height: 35px;
-  --tab-height: 35px;
+  --fg: #e8e4d9;
+  --fg-muted: #8a8678;
+  --fg-bright: #fff8e7;
+  --fg-status: #e8e4d9;
+  --fg-link: #f5c518;
+
+  --border: rgba(245, 197, 24, 0.18);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(245, 197, 24, 0.35);
+
+  --accent: #f5c518;
+  --accent-hover: #ffd84a;
+  --accent-dim: rgba(245, 197, 24, 0.2);
+  --accent-text: #1a1500;
+
+  --danger: #ff6b6b;
+  --success: #7ddea0;
+  --warning: #f5c518;
+
+  --activity-width: 56px;
+  --sidebar-width: 268px;
+  --chat-width: 340px;
+  --panel-height: 200px;
+  --statusbar-height: 28px;
+  --titlebar-height: 40px;
+  --tab-height: 40px;
+  --shell-gap: 10px;
+  --shell-pad: 12px;
 
   --font-ui: "IBM Plex Sans", "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
 
-  --radius: 2px;
-  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --radius: 14px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.55);
 }

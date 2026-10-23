@@ -5,13 +5,16 @@ import {
   IconGit,
   IconSearch,
   IconSettings,
+  IconSpark,
 } from "../icons";
 
 export type ActivityView = "explorer" | "search" | "git" | "extensions" | "settings";
 
 interface ActivityBarProps {
   active: ActivityView;
+  chatOpen: boolean;
   onSelect: (view: ActivityView) => void;
+  onToggleChat: () => void;
 }
 
 const ITEMS: { id: ActivityView; label: string; icon: ReactNode }[] = [
@@ -21,9 +24,12 @@ const ITEMS: { id: ActivityView; label: string; icon: ReactNode }[] = [
   { id: "extensions", label: "Extensions", icon: <IconExtensions /> },
 ];
 
-export function ActivityBar({ active, onSelect }: ActivityBarProps) {
+export function ActivityBar({ active, chatOpen, onSelect, onToggleChat }: ActivityBarProps) {
   return (
     <nav className="activity-bar" aria-label="Activity Bar">
+      <div className="activity-bar__brand" title="SmartIDE" aria-hidden>
+        S
+      </div>
       {ITEMS.map((item) => (
         <button
           key={item.id}
@@ -37,6 +43,16 @@ export function ActivityBar({ active, onSelect }: ActivityBarProps) {
           {item.icon}
         </button>
       ))}
+      <button
+        type="button"
+        className="activity-btn"
+        title="AI Chat"
+        aria-label="AI Chat"
+        aria-pressed={chatOpen}
+        onClick={onToggleChat}
+      >
+        <IconSpark />
+      </button>
       <div className="activity-bar__spacer" />
       <button
         type="button"

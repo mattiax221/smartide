@@ -85,9 +85,12 @@ export function EditorArea({
       ) : (
         <div className="editor-welcome">
           <div className="editor-welcome__inner">
-            <h1 className="editor-welcome__brand">SmartIDE</h1>
+            <h1 className="editor-welcome__brand">
+              Smart<span>IDE</span>
+            </h1>
             <p className="editor-welcome__hint">
-              Open a file from the explorer, or open Settings to configure AI provider API keys.
+              Open a file from the explorer, toggle AI Chat for coding help, or open Settings for
+              provider keys.
             </p>
           </div>
         </div>
