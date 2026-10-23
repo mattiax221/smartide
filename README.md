@@ -1,8 +1,8 @@
 # SmartIDE
 
-Desktop IDE scaffold built with **Tauri 2** (Rust), **React + TypeScript + Vite**, and **Monaco Editor**. Layout mirrors VS Code (activity bar, sidebar explorer, editor tabs, bottom panel, status bar) with a Dark+ inspired theme.
+Desktop IDE scaffold built with **Tauri 2** (Rust), **React + TypeScript + Vite**, and **Monaco Editor**. Glassmorphic charcoal + yellow UI with multi-provider AI chat (keys encrypted in the Tauri host).
 
-Glassmorphic charcoal + yellow UI (not a VS Code clone). Multi-provider AI chat is wired: Ollama (local), Groq, Gemini, OpenRouter, OpenAI, Anthropic — keys stay encrypted in the Tauri host and are used by the `ai_chat` command.
+Product roadmap (A→Z, Italian): Cursor Project store → `docs/roadmap.md`.
 
 ## Prerequisites
 
