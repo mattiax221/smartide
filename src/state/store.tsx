@@ -1,0 +1,421 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useReducer,
+  type ReactNode,
+} from "react";
+import type { DemoFile } from "../lib/demoFiles";
+import {
+  basename,
+  loadRecentWorkspaces,
+  pushRecentWorkspace,
+  type FsEntry,
+} from "../lib/workspace";
+import type {
+  ActivityView,
+  AiUiState,
+  IdeState,
+  OpenTab,
+  SettingsUiState,
+  Toast,
+  ToastKind,
+} from "./types";
+
+type Action =
+  | { type: "setActivity"; activity: ActivityView }
+  | { type: "setWorkspace"; rootPath: string; entries: FsEntry[] }
+  | { type: "setEntries"; entries: FsEntry[] }
+  | { type: "openDemoFile"; file: DemoFile }
+  | { type: "openRealFile"; entry: FsEntry; content: string }
+  | { type: "selectTab"; id: string; pane?: "primary" | "secondary" }
+  | { type: "closeTab"; id: string }
+  | { type: "togglePin"; id: string }
+  | { type: "changeContent"; id: string; content: string }
+  | { type: "markSaved"; id: string }
+  | { type: "setPanelCollapsed"; collapsed: boolean }
+  | { type: "setPanelHeight"; height: number }
+  | { type: "setPanelTab"; tab: IdeState["panelTab"] }
+  | { type: "toggleChat" }
+  | { type: "setChatOpen"; open: boolean }
+  | { type: "setAiProvider"; providerId: string; modelId?: string }
+  | { type: "setAiModel"; modelId: string }
+  | { type: "toggleSplit" }
+  | { type: "patchSettings"; patch: Partial<SettingsUiState> }
+  | { type: "pushToast"; toast: Omit<Toast, "id" | "createdAt"> & { id?: string } }
+  | { type: "dismissToast"; id: string }
+  | { type: "setHostBanner"; message: string | null }
+  | { type: "setHelpOpen"; open: boolean }
+  | { type: "setQuickOpen"; open: boolean }
+  | { type: "cycleTab"; dir: 1 | -1 }
+  | { type: "reorderTabs"; from: number; to: number }
+  | { type: "closeOtherTabs"; id: string }
+  | { type: "closeTabsToRight"; id: string }
+  | { type: "navBack" }
+  | { type: "navForward" };
+
+const initialState: IdeState = {
+  activity: "explorer",
+  workspace: {
+    rootPath: null,
+    rootLabel: "SMARTIDE",
+    entries: [],
+    recent: loadRecentWorkspaces(),
+  },
+  tabs: [],
+  activeTabId: null,
+  secondaryTabId: null,
+  splitEditor: false,
+  panelCollapsed: false,
+  panelHeight: 200,
+  panelTab: "terminal",
+  ai: {
+    chatOpen: true,
+    providerId: "ollama",
+    modelId: "llama3.2",
+  },
+  settings: {
+    editorFontSize: 13,
+    minimap: true,
+    wordWrap: false,
+    tabSize: 2,
+  },
+  toasts: [],
+  hostBanner: null,
+  helpOpen: false,
+  quickOpen: false,
+  navHistory: [],
+  navIndex: -1,
+};
+
+function pushNav(state: IdeState, id: string): IdeState {
+  if (state.activeTabId === id) return state;
+  const trimmed = state.navHistory.slice(0, state.navIndex + 1);
+  const navHistory = [...trimmed, id].slice(-50);
+  return { ...state, activeTabId: id, navHistory, navIndex: navHistory.length - 1 };
+}
+
+function demoToTab(file: DemoFile): OpenTab {
+  return {
+    id: file.id,
+    name: file.name,
+    path: file.path,
+    language: file.language,
+    content: file.content,
+    originalContent: file.content,
+    pinned: false,
+    dirty: false,
+    real: false,
+  };
+}
+
+function realToTab(entry: FsEntry, content: string): OpenTab {
+  return {
+    id: entry.path,
+    name: entry.name || basename(entry.path),
+    path: entry.path,
+    language: entry.language || "plaintext",
+    content,
+    originalContent: content,
+    pinned: false,
+    dirty: false,
+    real: true,
+  };
+}
+
+function reducer(state: IdeState, action: Action): IdeState {
+  switch (action.type) {
+    case "setActivity":
+      return { ...state, activity: action.activity };
+    case "setWorkspace": {
+      const label = basename(action.rootPath) || action.rootPath;
+      const recent = pushRecentWorkspace(action.rootPath);
+      return {
+        ...state,
+        activity: "explorer",
+        workspace: {
+          ...state.workspace,
+          rootPath: action.rootPath,
+          rootLabel: label.toUpperCase(),
+          entries: action.entries,
+          recent,
+        },
+        tabs: [],
+        activeTabId: null,
+        secondaryTabId: null,
+      };
+    }
+    case "setEntries":
+      return {
+        ...state,
+        workspace: { ...state.workspace, entries: action.entries },
+      };
+    case "openDemoFile": {
+      if (action.file.kind !== "file") return state;
+      const exists = state.tabs.some((t) => t.id === action.file.id);
+      const tabs = exists ? state.tabs : [...state.tabs, demoToTab(action.file)];
+      return pushNav({ ...state, activity: "explorer", tabs }, action.file.id);
+    }
+    case "openRealFile": {
+      const exists = state.tabs.some((t) => t.id === action.entry.path);
+      const tabs = exists
+        ? state.tabs
+        : [...state.tabs, realToTab(action.entry, action.content)];
+      return pushNav({ ...state, activity: "explorer", tabs }, action.entry.path);
+    }
+    case "selectTab":
+      if (action.pane === "secondary") {
+        return { ...state, secondaryTabId: action.id };
+      }
+      return pushNav(state, action.id);
+    case "closeTab": {
+      const tabs = state.tabs.filter((t) => t.id !== action.id);
+      let activeTabId = state.activeTabId;
+      let secondaryTabId = state.secondaryTabId;
+      if (activeTabId === action.id) {
+        activeTabId = tabs.length ? tabs[tabs.length - 1].id : null;
+      }
+      if (secondaryTabId === action.id) {
+        secondaryTabId = tabs.find((t) => t.id !== activeTabId)?.id ?? null;
+      }
+      return { ...state, tabs, activeTabId, secondaryTabId };
+    }
+    case "togglePin":
+      return {
+        ...state,
+        tabs: state.tabs.map((t) =>
+          t.id === action.id ? { ...t, pinned: !t.pinned } : t,
+        ),
+      };
+    case "changeContent":
+      return {
+        ...state,
+        tabs: state.tabs.map((t) =>
+          t.id === action.id
+            ? {
+                ...t,
+                content: action.content,
+                dirty: action.content !== t.originalContent,
+              }
+            : t,
+        ),
+      };
+    case "markSaved":
+      return {
+        ...state,
+        tabs: state.tabs.map((t) =>
+          t.id === action.id
+            ? { ...t, originalContent: t.content, dirty: false }
+            : t,
+        ),
+      };
+    case "setPanelCollapsed":
+      return { ...state, panelCollapsed: action.collapsed };
+    case "setPanelHeight":
+      return {
+        ...state,
+        panelHeight: Math.min(420, Math.max(120, action.height)),
+        panelCollapsed: false,
+      };
+    case "setPanelTab":
+      return { ...state, panelTab: action.tab, panelCollapsed: false };
+    case "toggleChat":
+      return { ...state, ai: { ...state.ai, chatOpen: !state.ai.chatOpen } };
+    case "setChatOpen":
+      return { ...state, ai: { ...state.ai, chatOpen: action.open } };
+    case "setAiProvider":
+      return {
+        ...state,
+        ai: {
+          ...state.ai,
+          providerId: action.providerId,
+          ...(action.modelId ? { modelId: action.modelId } : {}),
+        },
+      };
+    case "setAiModel":
+      return { ...state, ai: { ...state.ai, modelId: action.modelId } };
+    case "toggleSplit": {
+      const next = !state.splitEditor;
+      let secondaryTabId = state.secondaryTabId;
+      if (next && !secondaryTabId) {
+        secondaryTabId =
+          state.tabs.find((t) => t.id !== state.activeTabId)?.id ?? state.activeTabId;
+      }
+      return { ...state, splitEditor: next, secondaryTabId };
+    }
+    case "patchSettings":
+      return { ...state, settings: { ...state.settings, ...action.patch } };
+    case "pushToast": {
+      const toast: Toast = {
+        id: action.toast.id ?? crypto.randomUUID(),
+        kind: action.toast.kind,
+        title: action.toast.title,
+        detail: action.toast.detail,
+        createdAt: Date.now(),
+      };
+      return { ...state, toasts: [...state.toasts.slice(-4), toast] };
+    }
+    case "dismissToast":
+      return { ...state, toasts: state.toasts.filter((t) => t.id !== action.id) };
+    case "setHostBanner":
+      return { ...state, hostBanner: action.message };
+    case "setHelpOpen":
+      return { ...state, helpOpen: action.open };
+    case "cycleTab": {
+      if (state.tabs.length < 2 || !state.activeTabId) return state;
+      const idx = state.tabs.findIndex((t) => t.id === state.activeTabId);
+      const next =
+        state.tabs[(idx + action.dir + state.tabs.length) % state.tabs.length];
+      return pushNav(state, next.id);
+    }
+    case "setQuickOpen":
+      return { ...state, quickOpen: action.open };
+    case "reorderTabs": {
+      const tabs = [...state.tabs];
+      if (
+        action.from < 0 ||
+        action.to < 0 ||
+        action.from >= tabs.length ||
+        action.to >= tabs.length
+      ) {
+        return state;
+      }
+      const [moved] = tabs.splice(action.from, 1);
+      tabs.splice(action.to, 0, moved);
+      return { ...state, tabs };
+    }
+    case "closeOtherTabs":
+      return {
+        ...state,
+        tabs: state.tabs.filter((t) => t.id === action.id || t.pinned),
+        activeTabId: action.id,
+        secondaryTabId:
+          state.secondaryTabId === action.id ? state.secondaryTabId : null,
+      };
+    case "closeTabsToRight": {
+      const idx = state.tabs.findIndex((t) => t.id === action.id);
+      if (idx < 0) return state;
+      return {
+        ...state,
+        tabs: state.tabs.filter((t, i) => i <= idx || t.pinned),
+      };
+    }
+    case "navBack": {
+      if (state.navIndex <= 0) return state;
+      const navIndex = state.navIndex - 1;
+      const id = state.navHistory[navIndex];
+      if (!state.tabs.some((t) => t.id === id)) return state;
+      return { ...state, navIndex, activeTabId: id };
+    }
+    case "navForward": {
+      if (state.navIndex >= state.navHistory.length - 1) return state;
+      const navIndex = state.navIndex + 1;
+      const id = state.navHistory[navIndex];
+      if (!state.tabs.some((t) => t.id === id)) return state;
+      return { ...state, navIndex, activeTabId: id };
+    }
+    default:
+      return state;
+  }
+}
+
+interface IdeStoreApi {
+  state: IdeState;
+  setActivity: (activity: ActivityView) => void;
+  setWorkspace: (rootPath: string, entries: FsEntry[]) => void;
+  setEntries: (entries: FsEntry[]) => void;
+  openDemoFile: (file: DemoFile) => void;
+  openRealFile: (entry: FsEntry, content: string) => void;
+  selectTab: (id: string, pane?: "primary" | "secondary") => void;
+  closeTab: (id: string) => void;
+  togglePin: (id: string) => void;
+  changeContent: (id: string, content: string) => void;
+  markSaved: (id: string) => void;
+  setPanelCollapsed: (collapsed: boolean) => void;
+  setPanelHeight: (height: number) => void;
+  setPanelTab: (tab: IdeState["panelTab"]) => void;
+  toggleChat: () => void;
+  setAiProvider: (providerId: string, modelId?: string) => void;
+  setAiModel: (modelId: string) => void;
+  toggleSplit: () => void;
+  patchSettings: (patch: Partial<SettingsUiState>) => void;
+  pushToast: (kind: ToastKind, title: string, detail?: string) => void;
+  dismissToast: (id: string) => void;
+  setHostBanner: (message: string | null) => void;
+  notifyHostError: (err: unknown, fallback?: string) => void;
+  setHelpOpen: (open: boolean) => void;
+  setQuickOpen: (open: boolean) => void;
+  cycleTab: (dir: 1 | -1) => void;
+  reorderTabs: (from: number, to: number) => void;
+  closeOtherTabs: (id: string) => void;
+  closeTabsToRight: (id: string) => void;
+  navBack: () => void;
+  navForward: () => void;
+}
+
+const IdeStoreContext = createContext<IdeStoreApi | null>(null);
+
+export function IdeStoreProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(reducer, initialState);
+
+  const pushToast = useCallback((kind: ToastKind, title: string, detail?: string) => {
+    dispatch({ type: "pushToast", toast: { kind, title, detail } });
+  }, []);
+
+  const notifyHostError = useCallback((err: unknown, fallback = "Host error") => {
+    const detail = err instanceof Error ? err.message : String(err);
+    dispatch({ type: "pushToast", toast: { kind: "error", title: fallback, detail } });
+    dispatch({ type: "setHostBanner", message: detail });
+  }, []);
+
+  const api = useMemo<IdeStoreApi>(
+    () => ({
+      state,
+      setActivity: (activity) => dispatch({ type: "setActivity", activity }),
+      setWorkspace: (rootPath, entries) =>
+        dispatch({ type: "setWorkspace", rootPath, entries }),
+      setEntries: (entries) => dispatch({ type: "setEntries", entries }),
+      openDemoFile: (file) => dispatch({ type: "openDemoFile", file }),
+      openRealFile: (entry, content) =>
+        dispatch({ type: "openRealFile", entry, content }),
+      selectTab: (id, pane) => dispatch({ type: "selectTab", id, pane }),
+      closeTab: (id) => dispatch({ type: "closeTab", id }),
+      togglePin: (id) => dispatch({ type: "togglePin", id }),
+      changeContent: (id, content) => dispatch({ type: "changeContent", id, content }),
+      markSaved: (id) => dispatch({ type: "markSaved", id }),
+      setPanelCollapsed: (collapsed) => dispatch({ type: "setPanelCollapsed", collapsed }),
+      setPanelHeight: (height) => dispatch({ type: "setPanelHeight", height }),
+      setPanelTab: (tab) => dispatch({ type: "setPanelTab", tab }),
+      toggleChat: () => dispatch({ type: "toggleChat" }),
+      setAiProvider: (providerId, modelId) =>
+        dispatch({ type: "setAiProvider", providerId, modelId }),
+      setAiModel: (modelId) => dispatch({ type: "setAiModel", modelId }),
+      toggleSplit: () => dispatch({ type: "toggleSplit" }),
+      patchSettings: (patch) => dispatch({ type: "patchSettings", patch }),
+      pushToast,
+      dismissToast: (id) => dispatch({ type: "dismissToast", id }),
+      setHostBanner: (message) => dispatch({ type: "setHostBanner", message }),
+      notifyHostError,
+      setHelpOpen: (open) => dispatch({ type: "setHelpOpen", open }),
+      setQuickOpen: (open) => dispatch({ type: "setQuickOpen", open }),
+      cycleTab: (dir) => dispatch({ type: "cycleTab", dir }),
+      reorderTabs: (from, to) => dispatch({ type: "reorderTabs", from, to }),
+      closeOtherTabs: (id) => dispatch({ type: "closeOtherTabs", id }),
+      closeTabsToRight: (id) => dispatch({ type: "closeTabsToRight", id }),
+      navBack: () => dispatch({ type: "navBack" }),
+      navForward: () => dispatch({ type: "navForward" }),
+    }),
+    [state, pushToast, notifyHostError],
+  );
+
+  return <IdeStoreContext.Provider value={api}>{children}</IdeStoreContext.Provider>;
+}
+
+export function useIdeStore(): IdeStoreApi {
+  const ctx = useContext(IdeStoreContext);
+  if (!ctx) throw new Error("useIdeStore must be used within IdeStoreProvider");
+  return ctx;
+}
+
+export type { AiUiState, IdeState, OpenTab };
